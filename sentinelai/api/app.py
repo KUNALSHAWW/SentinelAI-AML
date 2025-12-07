@@ -8,12 +8,14 @@ exception handlers, and configuration.
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from pathlib import Path
 import time
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from sentinelai.core.config import settings
@@ -22,6 +24,9 @@ from sentinelai.api.routes import router
 from sentinelai.models.schemas import ErrorResponse
 
 logger = get_logger(__name__)
+
+# Frontend directory path
+FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -206,6 +211,34 @@ Default rate limit: 100 requests per minute per API key.
     
     # Include routers
     app.include_router(router)
+    
+    # =====================
+    # Serve Frontend
+    # =====================
+    
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    async def serve_frontend():
+        """Serve the main frontend page"""
+        index_file = FRONTEND_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return HTMLResponse("<h1>SentinelAI API</h1><p>Visit <a href='/docs'>/docs</a> for API documentation</p>")
+    
+    @app.get("/app.js", include_in_schema=False)
+    async def serve_js():
+        """Serve frontend JavaScript"""
+        js_file = FRONTEND_DIR / "app.js"
+        if js_file.exists():
+            return FileResponse(js_file, media_type="application/javascript")
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    @app.get("/styles.css", include_in_schema=False)
+    async def serve_css():
+        """Serve frontend CSS"""
+        css_file = FRONTEND_DIR / "styles.css"
+        if css_file.exists():
+            return FileResponse(css_file, media_type="text/css")
+        raise HTTPException(status_code=404, detail="File not found")
     
     # Exception handlers
     @app.exception_handler(HTTPException)

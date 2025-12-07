@@ -7,7 +7,10 @@
 // Configuration
 // ============================================
 const CONFIG = {
-    API_BASE_URL: 'https://sentinelai-api.onrender.com',
+    // Use relative URL when served from same domain, or absolute for cross-origin
+    API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'https://sentinelai-api.onrender.com' 
+        : '',  // Empty string = same origin
     ENDPOINTS: {
         health: '/health',
         analyze: '/api/v1/analyze/rules',  // Use rule-based endpoint (always available)
