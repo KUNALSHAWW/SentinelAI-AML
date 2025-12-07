@@ -39,9 +39,25 @@ router = APIRouter()
 # API Key security
 api_key_header = APIKeyHeader(name=settings.api.api_key_header, auto_error=False)
 
-# Service instances (would use dependency injection in production)
-analysis_service = AnalysisService()
-case_service = CaseManagementService()
+# Service instances (lazy initialization to allow rule-based endpoints to work without LLM)
+_analysis_service = None
+_case_service = None
+
+
+def get_analysis_service() -> AnalysisService:
+    """Lazy initialization of AnalysisService to avoid startup failures."""
+    global _analysis_service
+    if _analysis_service is None:
+        _analysis_service = AnalysisService()
+    return _analysis_service
+
+
+def get_case_service() -> CaseManagementService:
+    """Lazy initialization of CaseManagementService."""
+    global _case_service
+    if _case_service is None:
+        _case_service = CaseManagementService()
+    return _case_service
 
 
 # =====================
@@ -138,7 +154,7 @@ async def analyze_transaction(
     Returns a comprehensive risk assessment with scoring, alerts, and recommendations.
     """
     try:
-        result = await analysis_service.analyze_transaction(request)
+        result = await get_analysis_service().analyze_transaction(request)
         
         # Background task for audit logging
         background_tasks.add_task(
@@ -176,7 +192,7 @@ async def batch_analyze(
     Maximum 1000 transactions per batch.
     """
     try:
-        results = await analysis_service.batch_analyze(
+        results = await get_analysis_service().batch_analyze(
             request.transactions,
             max_concurrent=5
         )
@@ -199,7 +215,7 @@ async def get_analysis_metrics(
     api_key: str = Depends(verify_api_key)
 ):
     """Get metrics from the analysis service."""
-    return analysis_service.get_metrics()
+    return get_analysis_service().get_metrics()
 
 
 @router.post(
@@ -559,7 +575,7 @@ async def create_case(
     api_key: str = Depends(verify_api_key)
 ):
     """Create a new investigation case."""
-    return await case_service.create_case(request)
+    return await get_case_service().create_case(request)
 
 
 @router.get(
@@ -582,7 +598,7 @@ async def list_cases(
     Supports filtering by status, priority, and assignee.
     Results are paginated and sorted by creation date (newest first).
     """
-    return await case_service.list_cases(
+    return await get_case_service().list_cases(
         status=status,
         priority=priority,
         assigned_to=assigned_to,
@@ -602,7 +618,7 @@ async def get_case(
     api_key: str = Depends(verify_api_key)
 ):
     """Get a specific case by ID."""
-    case = await case_service.get_case(case_id)
+    case = await get_case_service().get_case(case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     return case
@@ -620,7 +636,7 @@ async def update_case(
     api_key: str = Depends(verify_api_key)
 ):
     """Update a case's status, priority, or assignment."""
-    case = await case_service.update_case(case_id, request)
+    case = await get_case_service().update_case(case_id, request)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     return case
@@ -638,7 +654,7 @@ async def assign_case(
     api_key: str = Depends(verify_api_key)
 ):
     """Assign a case to an analyst."""
-    case = await case_service.assign_case(case_id, assignee)
+    case = await get_case_service().assign_case(case_id, assignee)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     return case
@@ -656,7 +672,7 @@ async def escalate_case(
     api_key: str = Depends(verify_api_key)
 ):
     """Escalate a case for senior review."""
-    case = await case_service.escalate_case(case_id, reason, escalated_by=api_key[:8])
+    case = await get_case_service().escalate_case(case_id, reason, escalated_by=api_key[:8])
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     return case
@@ -674,7 +690,7 @@ async def file_sar(
     api_key: str = Depends(verify_api_key)
 ):
     """Mark a case as SAR filed."""
-    case = await case_service.file_sar(case_id, sar_reference, filed_by=api_key[:8])
+    case = await get_case_service().file_sar(case_id, sar_reference, filed_by=api_key[:8])
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     return case
@@ -694,7 +710,7 @@ async def close_case(
 ):
     """Close a case with specified status and reason."""
     try:
-        case = await case_service.close_case(
+        case = await get_case_service().close_case(
             case_id, status, reason, closed_by=api_key[:8]
         )
         if not case:
@@ -715,7 +731,7 @@ async def add_comment(
     api_key: str = Depends(verify_api_key)
 ):
     """Add a comment to a case."""
-    comment = await case_service.add_comment(
+    comment = await get_case_service().add_comment(
         case_id, request, author=api_key[:8]
     )
     return comment
@@ -731,7 +747,7 @@ async def get_comments(
     api_key: str = Depends(verify_api_key)
 ):
     """Get all comments for a case."""
-    return await case_service.get_comments(case_id)
+    return await get_case_service().get_comments(case_id)
 
 
 # =====================
@@ -756,7 +772,7 @@ async def get_dashboard_metrics(
     - Case statistics
     - Risk distribution
     """
-    case_metrics = await case_service.get_dashboard_metrics()
+    case_metrics = await get_case_service().get_dashboard_metrics()
     
     return DashboardMetrics(
         total_transactions_24h=0,  # Would come from transaction DB
