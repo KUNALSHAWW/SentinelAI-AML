@@ -209,11 +209,8 @@ Default rate limit: 100 requests per minute per API key.
         requests_per_minute=settings.api.rate_limit_requests
     )
     
-    # Include routers
-    app.include_router(router)
-    
     # =====================
-    # Serve Frontend
+    # Serve Frontend (BEFORE API routes)
     # =====================
     
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -239,6 +236,9 @@ Default rate limit: 100 requests per minute per API key.
         if css_file.exists():
             return FileResponse(css_file, media_type="text/css")
         raise HTTPException(status_code=404, detail="File not found")
+    
+    # Include API routers (after frontend routes)
+    app.include_router(router)
     
     # Exception handlers
     @app.exception_handler(HTTPException)
