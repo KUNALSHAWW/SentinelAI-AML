@@ -109,7 +109,7 @@ async def health_check():
 
 
 @router.get(
-    "/",
+    "/api",
     tags=["System"],
     summary="API Root"
 )
@@ -120,7 +120,8 @@ async def root():
         "version": settings.app_version,
         "description": "Financial Crime Intelligence Platform",
         "documentation": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "frontend": "/"
     }
 
 
