@@ -104,8 +104,8 @@ class Customer(Base):
     account_opened_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     account_status: Mapped[str] = mapped_column(String(50), default="ACTIVE")
     
-    # Metadata
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    # Extra Data
+    extra_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
