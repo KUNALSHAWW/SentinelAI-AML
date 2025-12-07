@@ -539,7 +539,7 @@ async def analyze_transaction_rules(
             risk_level=risk_level,
             risk_factors=risk_factors,
             decision_path=decision_path,
-            alerts_triggered=len(alerts)
+            alerts_triggered=[a.alert_type.value for a in alerts]
         ),
         llm_analysis=LLMAnalysisResult(
             summary=f"Transaction flagged as {risk_level.value} risk with score {risk_score}/100",
