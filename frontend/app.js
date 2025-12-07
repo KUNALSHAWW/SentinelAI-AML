@@ -372,7 +372,8 @@ async function callAPI(requestData) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-API-Key': 'demo-key'
             },
             body: JSON.stringify(requestData),
             signal: controller.signal
