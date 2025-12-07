@@ -10,7 +10,8 @@ const CONFIG = {
     API_BASE_URL: 'https://sentinelai-api.onrender.com',
     ENDPOINTS: {
         health: '/health',
-        analyze: '/api/v1/analyze',
+        analyze: '/api/v1/analyze/rules',  // Use rule-based endpoint (always available)
+        analyzeLLM: '/api/v1/analyze',     // LLM-powered endpoint (may timeout)
         cases: '/api/v1/cases'
     },
     ANIMATION: {
