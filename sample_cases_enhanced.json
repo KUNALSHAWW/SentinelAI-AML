@@ -1,0 +1,243 @@
+[
+  {
+    "scenario": "Clean Business Transaction",
+    "transaction": {
+      "amount": 25000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "US",
+      "destination_country": "CA",
+      "parties": ["abc_manufacturing", "xyz_supplies_ca"],
+      "documents": ["Invoice #INV-2024-001", "Purchase Order #PO-5892"],
+      "timestamp": "2025-01-15T10:30:00Z"
+    },
+    "customer": {
+      "name": "ABC Manufacturing Inc",
+      "customer_type": "CORPORATE",
+      "account_age_days": 1825,
+      "country_of_residence": "US",
+      "transaction_history": [
+        {"amount": 22000, "timestamp": "2024-12-15T09:00:00Z"},
+        {"amount": 28000, "timestamp": "2024-11-15T11:00:00Z"}
+      ]
+    }
+  },
+  {
+    "scenario": "High-Risk Jurisdiction with Tax Haven",
+    "transaction": {
+      "amount": 500000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "RU",
+      "destination_country": "KY",
+      "intermediate_countries": ["AE", "CH"],
+      "parties": ["moscow_trading_llc", "cayman_holdings_limited"],
+      "documents": [],
+      "timestamp": "2025-01-15T14:00:00Z"
+    },
+    "customer": {
+      "name": "Moscow Trading LLC",
+      "customer_type": "CORPORATE",
+      "account_age_days": 45,
+      "country_of_residence": "RU",
+      "transaction_history": []
+    }
+  },
+  {
+    "scenario": "Potential Structuring Pattern",
+    "transaction": {
+      "amount": 9500,
+      "currency": "USD",
+      "transaction_type": "CASH",
+      "origin_country": "US",
+      "destination_country": "US",
+      "parties": ["john_walker_deposit"],
+      "documents": [],
+      "timestamp": "2025-01-15T16:00:00Z"
+    },
+    "customer": {
+      "name": "John Walker",
+      "customer_type": "INDIVIDUAL",
+      "account_age_days": 90,
+      "country_of_residence": "US",
+      "transaction_history": [
+        {"amount": 9200, "timestamp": "2025-01-15T10:00:00Z"},
+        {"amount": 9800, "timestamp": "2025-01-14T14:00:00Z"},
+        {"amount": 9600, "timestamp": "2025-01-13T11:00:00Z"},
+        {"amount": 9400, "timestamp": "2025-01-12T09:00:00Z"}
+      ]
+    }
+  },
+  {
+    "scenario": "Cryptocurrency Mixer with Darknet Association",
+    "transaction": {
+      "amount": 250000,
+      "currency": "USD",
+      "transaction_type": "CRYPTO",
+      "asset_type": "CRYPTO",
+      "origin_country": "UNKNOWN",
+      "destination_country": "US",
+      "parties": ["anonymous_wallet_xyz"],
+      "crypto_details": {
+        "wallet_age_days": 3,
+        "mixer_used": true,
+        "cross_chain_swaps": 5,
+        "darknet_market": "hydra_remnant",
+        "token_type": "ETH"
+      },
+      "timestamp": "2025-01-15T20:00:00Z"
+    },
+    "customer": {
+      "name": "CryptoTrader X",
+      "customer_type": "INDIVIDUAL",
+      "account_age_days": 7,
+      "country_of_residence": "US",
+      "transaction_history": []
+    }
+  },
+  {
+    "scenario": "PEP with Large Transaction",
+    "transaction": {
+      "amount": 2500000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "NG",
+      "destination_country": "GB",
+      "parties": ["minister_family_trust", "london_real_estate_holdings"],
+      "documents": ["Property Purchase Agreement"],
+      "timestamp": "2025-01-15T08:00:00Z"
+    },
+    "customer": {
+      "name": "Adebayo Minister of Finance Nigeria",
+      "customer_type": "INDIVIDUAL",
+      "account_age_days": 14,
+      "country_of_residence": "NG",
+      "nationality": "NG",
+      "occupation": "Government Official",
+      "transaction_history": []
+    }
+  },
+  {
+    "scenario": "Sanctions List Hit - Russian Bank",
+    "transaction": {
+      "amount": 10000000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "RU",
+      "destination_country": "IN",
+      "intermediate_countries": ["AE", "TR"],
+      "parties": ["sanctioned_russian_bank", "indian_import_export_co", "dubai_intermediary"],
+      "documents": ["Trade Finance Agreement"],
+      "timestamp": "2025-01-15T12:00:00Z"
+    },
+    "customer": {
+      "name": "Sanctioned Russian Bank",
+      "customer_type": "FINANCIAL_INSTITUTION",
+      "account_age_days": 3650,
+      "country_of_residence": "RU",
+      "transaction_history": []
+    }
+  },
+  {
+    "scenario": "Trade-Based Money Laundering Indicators",
+    "transaction": {
+      "amount": 750000,
+      "currency": "USD",
+      "transaction_type": "TRADE_FINANCE",
+      "origin_country": "CN",
+      "destination_country": "PA",
+      "parties": ["shenzhen_electronics", "panama_distribution_sa"],
+      "documents": [
+        "Invoice showing $50 per unit for basic electronics (market price: $5)",
+        "Bill of Lading #BL-2024-8976",
+        "Letter of Credit #LC-HSBC-445566"
+      ],
+      "timestamp": "2025-01-15T06:00:00Z"
+    },
+    "customer": {
+      "name": "Panama Distribution SA",
+      "customer_type": "CORPORATE",
+      "account_age_days": 180,
+      "country_of_residence": "PA",
+      "transaction_history": [
+        {"amount": 680000, "timestamp": "2024-12-01T00:00:00Z"},
+        {"amount": 720000, "timestamp": "2024-11-01T00:00:00Z"}
+      ]
+    }
+  },
+  {
+    "scenario": "Shell Company Network",
+    "transaction": {
+      "amount": 5000000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "BVI",
+      "destination_country": "VG",
+      "intermediate_countries": ["MT", "CY", "LU"],
+      "parties": [
+        "offshore_nominee_ltd_bvi",
+        "global_consulting_vg",
+        "malta_investments_mt",
+        "cyprus_holdings_cy"
+      ],
+      "documents": [],
+      "timestamp": "2025-01-15T04:00:00Z"
+    },
+    "customer": {
+      "name": "Offshore Nominee Ltd",
+      "customer_type": "CORPORATE",
+      "account_age_days": 30,
+      "country_of_residence": "BVI",
+      "transaction_history": []
+    }
+  },
+  {
+    "scenario": "New Account Velocity Alert",
+    "transaction": {
+      "amount": 75000,
+      "currency": "USD",
+      "transaction_type": "WIRE_TRANSFER",
+      "origin_country": "US",
+      "destination_country": "MX",
+      "parties": ["new_customer_llc", "mexico_services_sa"],
+      "timestamp": "2025-01-15T22:00:00Z"
+    },
+    "customer": {
+      "name": "New Customer LLC",
+      "customer_type": "CORPORATE",
+      "account_age_days": 5,
+      "country_of_residence": "US",
+      "transaction_history": [
+        {"amount": 50000, "timestamp": "2025-01-15T18:00:00Z"},
+        {"amount": 45000, "timestamp": "2025-01-15T14:00:00Z"},
+        {"amount": 60000, "timestamp": "2025-01-15T10:00:00Z"},
+        {"amount": 55000, "timestamp": "2025-01-14T16:00:00Z"},
+        {"amount": 48000, "timestamp": "2025-01-14T12:00:00Z"}
+      ]
+    }
+  },
+  {
+    "scenario": "Low Risk - Established Customer Regular Pattern",
+    "transaction": {
+      "amount": 15000,
+      "currency": "USD",
+      "transaction_type": "ACH",
+      "origin_country": "US",
+      "destination_country": "US",
+      "parties": ["payroll_services_inc"],
+      "documents": ["Payroll Register"],
+      "timestamp": "2025-01-15T08:00:00Z"
+    },
+    "customer": {
+      "name": "Midwest Manufacturing Corp",
+      "customer_type": "CORPORATE",
+      "account_age_days": 3650,
+      "country_of_residence": "US",
+      "transaction_history": [
+        {"amount": 15000, "timestamp": "2024-12-15T08:00:00Z"},
+        {"amount": 15200, "timestamp": "2024-11-15T08:00:00Z"},
+        {"amount": 14800, "timestamp": "2024-10-15T08:00:00Z"}
+      ]
+    }
+  }
+]

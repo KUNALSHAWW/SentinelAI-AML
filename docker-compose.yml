@@ -1,0 +1,180 @@
+# ============================================
+# SentinelAI - Docker Compose
+# ============================================
+# Full stack deployment with all services
+# ============================================
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # SentinelAI API Server
+  # ===========================================
+  sentinelai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentinelai-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SENTINEL_ENVIRONMENT=production
+      - SENTINEL_API_HOST=0.0.0.0
+      - SENTINEL_API_PORT=8000
+      - SENTINEL_API_WORKERS=4
+      - SENTINEL_LLM_PROVIDER=groq
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - SENTINEL_DB_POSTGRES_HOST=postgres
+      - SENTINEL_DB_REDIS_HOST=redis
+      - SENTINEL_DB_NEO4J_URI=bolt://neo4j:7687
+      - SENTINEL_MONITOR_LOG_FORMAT=json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================
+  # PostgreSQL Database
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentinelai-postgres
+    environment:
+      - POSTGRES_USER=sentinel
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sentinel_password}
+      - POSTGRES_DB=sentinelai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinelai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Redis Cache
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: sentinelai-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Neo4j Graph Database (Optional)
+  # ===========================================
+  neo4j:
+    image: neo4j:5-community
+    container_name: sentinelai-neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-neo4j_password}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+    profiles:
+      - full
+
+  # ===========================================
+  # Prometheus Metrics (Optional)
+  # ===========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sentinelai-prometheus
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # Grafana Dashboard (Optional)
+  # ===========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sentinelai-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - sentinel-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+# ===========================================
+# Networks
+# ===========================================
+networks:
+  sentinel-network:
+    driver: bridge
+    name: sentinel-network
+
+# ===========================================
+# Volumes
+# ===========================================
+volumes:
+  postgres_data:
+    name: sentinelai-postgres-data
+  redis_data:
+    name: sentinelai-redis-data
+  neo4j_data:
+    name: sentinelai-neo4j-data
+  neo4j_logs:
+    name: sentinelai-neo4j-logs
+  prometheus_data:
+    name: sentinelai-prometheus-data
+  grafana_data:
+    name: sentinelai-grafana-data
