@@ -1,409 +1,371 @@
-# 🛡️ SentinelAI - Enterprise AML Detection Platform
+<p align="center">
+  <img src="assets/banner.png" alt="SentinelAI Banner" width="800"/>
+</p>
 
-<div align="center">
+<h1 align="center">🛡️ SentinelAI</h1>
+<h3 align="center">AI-Powered Anti-Money Laundering & Fraud Detection Platform</h3>
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-v0.2+-green.svg)](https://github.com/langchain-ai/langgraph)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-teal.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+"/></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.109+-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/></a>
+  <a href="https://www.langchain.com/"><img src="https://img.shields.io/badge/LangChain-RAG-1C3C3C?style=for-the-badge&logo=chainlink&logoColor=white" alt="LangChain"/></a>
+  <a href="https://neo4j.com/"><img src="https://img.shields.io/badge/Neo4j-Graph_DB-008CC1?style=for-the-badge&logo=neo4j&logoColor=white" alt="Neo4j"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License: MIT"/></a>
+</p>
 
-**Production-grade Anti-Money Laundering detection system powered by LangGraph, Chain-of-Thought reasoning, and ReAct prompting patterns.**
-
-[Features](#-features) •
-[Architecture](#-architecture) •
-[Quick Start](#-quick-start) •
-[API Documentation](#-api-documentation) •
-[Deployment](#-deployment)
-
-</div>
-
----
-
-## 🎯 Overview
-
-**SentinelAI** is an enterprise-grade AML detection platform that transforms traditional rule-based compliance into intelligent, AI-driven risk assessment. Built on LangGraph's powerful workflow orchestration, it employs advanced reasoning techniques including Chain-of-Thought (CoT) and ReAct patterns to provide explainable, auditable compliance decisions.
-
-### Why SentinelAI?
-
-| Traditional AML | SentinelAI |
-|----------------|------------|
-| Rule-based detection | AI-powered pattern recognition |
-| High false positive rates | Intelligent risk scoring |
-| Manual SAR generation | Automated SAR drafting |
-| Siloed analysis | Unified multi-factor assessment |
-| Black-box decisions | Explainable CoT reasoning |
+<p align="center">
+  <a href="#-the-problem">The Problem</a> •
+  <a href="#-the-solution">The Solution</a> •
+  <a href="#-key-features">Key Features</a> •
+  <a href="#-installation">Installation</a> •
+  <a href="#-api-documentation">API Docs</a> •
+  <a href="#-deployment">Deployment</a>
+</p>
 
 ---
 
-## 🏗️ Architecture
+## 🎯 The Problem
+
+Traditional Anti-Money Laundering (AML) systems are fundamentally broken:
+
+| ❌ Traditional AML | Impact |
+|-------------------|--------|
+| **Static Rules** | Cannot adapt to new laundering techniques |
+| **80%+ False Positives** | Compliance teams drown in alerts |
+| **Siloed Analysis** | Misses complex multi-entity schemes |
+| **No Context** | Ignores real-world news about entities |
+| **Black Box Decisions** | Auditors can't explain why alerts triggered |
+
+Money launderers exploit these weaknesses daily—structuring transactions just under thresholds, using shell companies, and leveraging geographic complexity. **Rule-based systems cannot keep up.**
+
+---
+
+## 💡 The Solution
+
+**SentinelAI** combines three cutting-edge technologies to create an intelligent, adaptive AML system:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            SentinelAI Platform                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐     ┌─────────────────────────────────────────────────┐    │
-│  │   FastAPI   │────▶│              LangGraph Orchestrator             │   │
-│  │   Gateway   │     │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ │    │
-│  └─────────────┘     │  │ CoT     │ │ ReAct   │ │ Multi   │ │ State  │ │    │
-│         │            │  │ Prompts │ │ Agents  │ │ Agent   │ │ Graph  │ │    │
-│         ▼            │  └─────────┘ └─────────┘ └─────────┘ └────────┘ │    │
-│  ┌─────────────┐     └─────────────────────────────────────────────────┘    │
-│  │   Redis     │                           │                                │
-│  │   Cache     │◀──────────────────────────┘                               │
-│  └─────────────┘                           │                                │
-│         │            ┌─────────────────────▼────────────────────────┐       │
-│         ▼            │              Specialized Agents               │      │
-│  ┌─────────────┐     │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │       │
-│  │ PostgreSQL  │     │  │Transaction│ │   PEP    │ │  Sanctions   │  │      │
-│  │  Database   │◀────│  │ Analysis  │ │Screening │ │  Screening   │  │      │
-│  └─────────────┘     │  └──────────┘ └──────────┘ └──────────────┘  │       │
-│                      │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │       │
-│  ┌─────────────┐     │  │ Network  │ │Behavioral│ │   Crypto     │  │       │
-│  │ Prometheus  │     │  │ Analysis │ │ Analysis │ │ Risk Agent   │  │       │
-│  │  + Grafana  │     │  └──────────┘ └──────────┘ └──────────────┘  │       │
-│  └─────────────┘     └──────────────────────────────────────────────┘       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          SentinelAI Architecture                           │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────────┐   │
+│   │   Frontend  │───▶│  FastAPI        │───▶│    RAG Pipeline         │   │
+│   │  Dashboard  │    │  REST API       │    │  (Web Search + Context) │   │
+│   └─────────────┘    └─────────────────┘    └───────────┬─────────────┘   │
+│                                                         │                  │
+│   ┌─────────────────────────────────────────────────────▼──────────────┐  │
+│   │                      LLM Analysis Engine                            │  │
+│   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │  │
+│   │  │ Zephyr-7B /  │  │  Chain-of-   │  │  Structured Risk         │  │  │
+│   │  │ Llama-3 LLM  │  │  Thought     │  │  Assessment (JSON)       │  │  │
+│   │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────┬──────────────┘  │
+│                                                         │                  │
+│   ┌─────────────────────────────────────────────────────▼──────────────┐  │
+│   │                     Neo4j Graph Database                            │  │
+│   │  • Detect hidden entity relationships                               │  │
+│   │  • Identify shell company networks                                  │  │
+│   │  • Track fund flows across accounts                                 │  │
+│   └────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Components
+### How It Works
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **API Gateway** | FastAPI | REST API with OpenAPI docs, rate limiting |
-| **Orchestrator** | LangGraph | Workflow coordination, state management |
-| **Agents** | Groq LLM (Llama3-70B) | Specialized analysis with CoT/ReAct |
-| **Database** | PostgreSQL | Transaction, case, and audit storage |
-| **Cache** | Redis | LLM response caching, session management |
-| **Monitoring** | Prometheus + Grafana | Metrics, alerting, dashboards |
+1. **RAG (Retrieval-Augmented Generation)**: When analyzing a corporate entity, SentinelAI searches the web for real-time adverse media, sanctions mentions, and business information.
+
+2. **LLM Analysis**: A specialized financial crime LLM (Zephyr-7B or Llama-3) analyzes the transaction with full context, using Chain-of-Thought reasoning to explain every risk factor.
+
+3. **Graph Intelligence**: Neo4j detects hidden patterns that rules miss—circular transactions, shell company networks, and structuring schemes across multiple entities.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-### 🔍 Intelligent Analysis Agents
+### 🚀 Hybrid Analysis Engine
+Combines rule-based speed with AI depth. Rule engine handles high-volume screening; LLM investigates flagged cases with full reasoning.
 
-- **Transaction Analysis Agent** - Deep pattern analysis with Chain-of-Thought reasoning
-- **PEP Screening Agent** - Politically Exposed Persons identification with fuzzy matching
-- **Sanctions Agent** - Real-time screening against OFAC, EU, UN lists
-- **Network Analysis Agent** - Entity relationship and shell company detection
-- **Behavioral Analysis Agent** - Anomaly detection and velocity checks
-- **Crypto Risk Agent** - Mixer detection, darknet association, cross-chain analysis
-- **Geographic Risk Agent** - Jurisdiction risk scoring and tax haven detection
-- **Document Analysis Agent** - Trade document verification and fraud detection
+### 🕸️ Graph Intelligence (Neo4j)
+- **Ring Detection**: Identifies circular fund flows (A→B→C→A)
+- **Shell Company Networks**: Maps beneficial ownership structures
+- **Structuring Detection**: Finds smurfing patterns across accounts
+- **Entity Resolution**: Links aliases and related parties
 
-### 🧠 Advanced AI Capabilities
-
-- **Chain-of-Thought (CoT) Prompting** - Step-by-step reasoning for explainable decisions
-- **ReAct Pattern** - Reason-Act-Observe loops for complex investigations
-- **Multi-Agent Orchestration** - Parallel and conditional agent execution
-- **Context-Aware Analysis** - Historical pattern consideration
-- **Explainable AI** - Full reasoning trace for audit compliance
+### 🧠 Adaptive AI with RAG
+- **Real-Time Web Search**: Fetches adverse media, sanctions lists, news
+- **Entity Intelligence**: Gathers business registration, key personnel
+- **Context Injection**: LLM sees full entity background before analysis
+- **Multi-Provider Support**: Tavily, SerpAPI, or DuckDuckGo (free)
 
 ### 📊 Enterprise Features
-
-- **RESTful API** - Full CRUD operations with OpenAPI documentation
-- **Batch Processing** - Analyze thousands of transactions efficiently
-- **Case Management** - End-to-end investigation workflow
-- **SAR Generation** - Automated Suspicious Activity Report drafting
-- **Audit Trail** - Complete action logging for compliance
-- **Real-time Alerts** - Configurable risk-based notifications
-- **Docker Deployment** - Production-ready containerization
-- **Prometheus Metrics** - Comprehensive observability
+- **RESTful API**: Full OpenAPI documentation at `/docs`
+- **Case Management**: End-to-end investigation workflow
+- **SAR Generation**: Automated Suspicious Activity Report drafting
+- **Audit Trail**: Complete logging for regulatory compliance
+- **Docker Ready**: Production-grade containerization
 
 ---
 
-## 🚀 Quick Start
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/screenshot-dashboard.png" alt="Dashboard" width="80%"/>
+  <br/>
+  <em>Transaction Analysis Dashboard</em>
+</p>
+
+<p align="center">
+  <img src="assets/screenshot-analysis.png" alt="Analysis" width="80%"/>
+  <br/>
+  <em>AI-Powered Risk Analysis with RAG Context</em>
+</p>
+
+---
+
+## 🛠️ Installation
 
 ### Prerequisites
 
-- Python 3.11+
-- PostgreSQL 15+
-- Redis 7+
-- Docker & Docker Compose (optional)
-- Groq API Key
+- **Python 3.11+**
+- **Neo4j** (Desktop or AuraDB Cloud)
+- **API Keys**: Groq or HuggingFace (required), Tavily (optional)
 
-### Option 1: Docker Compose (Recommended)
+### Step 1: Clone & Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/KUNALSHAWW/SentinelAI-AML.git
 cd SentinelAI-AML
 
-# Create environment file
-cp .env.example .env
-# Edit .env with your GROQ_API_KEY
-
-# Start all services
-docker-compose up -d
-
-# Check health
-curl http://localhost:8000/health
-```
-
-### Option 2: Local Development
-
-```bash
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Activate (Windows)
+.\venv\Scripts\activate
+
+# Activate (macOS/Linux)
+source venv/bin/activate
 
 # Install dependencies
-pip install -e ".[dev]"
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Initialize database
-python -c "from sentinelai.models.database import init_db; import asyncio; asyncio.run(init_db())"
-
-# Start the server
-sentinelai serve --reload
+pip install -r requirements.txt
 ```
 
-### Option 3: Using Makefile
+### Step 2: Configure Neo4j (Critical!)
+
+**Option A: Neo4j Desktop (Local Development)**
+1. Download [Neo4j Desktop](https://neo4j.com/download/)
+2. Create a new project and database
+3. Start the database (default: `neo4j://localhost:7687`)
+4. Set password (e.g., `neo4j123`)
+
+**Option B: Neo4j AuraDB (Production/Cloud)**
+1. Create free account at [Neo4j AuraDB](https://neo4j.com/cloud/aura-free/)
+2. Create a new instance
+3. Copy connection URI: `neo4j+s://xxxxx.databases.neo4j.io`
+4. Save credentials
+
+### Step 3: Environment Configuration
 
 ```bash
-# Install dependencies
-make install
-
-# Run development server
-make dev
-
-# Run tests
-make test
-
-# Build Docker images
-make docker-build
+# Create .env from template
+cp .env.example .env
 ```
+
+Edit `.env` with your values:
+
+```env
+# Required: LLM Provider
+SENTINEL_LLM_PROVIDER=huggingface
+HUGGINGFACE_API_KEY=hf_your_key_here
+# OR use Groq (faster)
+# SENTINEL_LLM_PROVIDER=groq
+# GROQ_API_KEY=gsk_your_key_here
+
+# Required: Neo4j
+SENTINEL_DB_NEO4J_URI=neo4j://localhost:7687
+SENTINEL_DB_NEO4J_USER=neo4j
+SENTINEL_DB_NEO4J_PASSWORD=your_password
+
+# Optional: RAG Web Search (improves corporate entity analysis)
+TAVILY_API_KEY=tvly-your_key_here
+```
+
+### Step 4: Run the Server
+
+```bash
+# Development mode (with auto-reload)
+uvicorn sentinelai.api.app:app --reload --host 0.0.0.0 --port 8000
+
+# Production mode
+uvicorn sentinelai.api.app:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Step 5: Access the Application
+
+- **Dashboard**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
 
 ---
 
-## 📡 API Documentation
+## 📚 API Documentation
 
-### Endpoints Overview
+### Core Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/analyze` | Analyze a single transaction |
-| `POST` | `/api/v1/batch` | Batch analyze multiple transactions |
-| `GET` | `/api/v1/analysis/{id}` | Get analysis results |
-| `POST` | `/api/v1/cases` | Create investigation case |
-| `GET` | `/api/v1/cases/{id}` | Get case details |
-| `PATCH` | `/api/v1/cases/{id}` | Update case status |
-| `GET` | `/api/v1/alerts` | List alerts with filtering |
-| `GET` | `/health` | Health check |
-| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/health` | System health check |
+| `POST` | `/api/v1/analyze/rag` | **RAG-powered analysis** (recommended) |
+| `POST` | `/api/v1/analyze/rules` | Rule-based analysis (fast fallback) |
+| `POST` | `/api/v1/analyze` | Legacy LLM analysis |
+| `GET` | `/api/v1/cases` | List investigation cases |
+| `POST` | `/api/v1/cases` | Create new case |
 
 ### Example: Analyze Transaction
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/analyze \
+curl -X POST http://localhost:8000/api/v1/analyze/rag \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: demo-key" \
   -d '{
     "transaction": {
       "amount": 500000,
       "currency": "USD",
-      "transaction_type": "WIRE_TRANSFER",
-      "origin_country": "RU",
+      "origin_country": "US",
       "destination_country": "KY",
-      "parties": ["moscow_trading_llc", "cayman_holdings"]
+      "transaction_type": "WIRE_TRANSFER"
     },
     "customer": {
-      "name": "Moscow Trading LLC",
+      "name": "Oceanic Holdings Ltd",
       "customer_type": "CORPORATE",
-      "account_age_days": 30
-    }
+      "account_age_days": 45
+    },
+    "enable_rag": true,
+    "enable_llm": true
   }'
 ```
 
-### Example Response
+### Response Structure
 
 ```json
 {
-  "analysis_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "overall_risk_score": 87.5,
-  "risk_level": "CRITICAL",
-  "decision": "BLOCK",
-  "requires_sar": true,
-  "reasoning": {
-    "chain_of_thought": [
-      "1. Transaction involves high-risk jurisdiction (Russia)",
-      "2. Destination is known tax haven (Cayman Islands)",
-      "3. New account with no transaction history",
-      "4. Large amount ($500,000) exceeds normal thresholds",
-      "5. Combined risk factors indicate potential layering"
-    ],
-    "conclusion": "High probability of money laundering activity"
+  "request_id": "uuid",
+  "risk_assessment": {
+    "risk_score": 75,
+    "risk_level": "HIGH",
+    "risk_factors": [...],
+    "decision_path": ["entry:screening", "rag:entity_search", "llm:analysis"]
   },
-  "agent_results": {
-    "transaction_analysis": { "score": 85, "flags": ["high_value", "new_account"] },
-    "geo_risk": { "score": 95, "flags": ["sanctioned_origin", "tax_haven_dest"] },
-    "sanctions": { "score": 75, "flags": ["potential_evasion"] }
+  "llm_analysis": {
+    "reasoning": "Chain-of-thought analysis...",
+    "confidence_score": 0.87,
+    "recommendation": "ESCALATE"
   },
-  "alerts": [
-    { "type": "HIGH_RISK_JURISDICTION", "severity": "HIGH" },
-    { "type": "TAX_HAVEN_TRANSFER", "severity": "MEDIUM" }
-  ]
+  "rag_analysis": {
+    "entity_searched": "Oceanic Holdings Ltd",
+    "adverse_media_found": true,
+    "sanctions_indicators": ["offshore", "shell company"],
+    "key_findings": [...]
+  },
+  "recommended_action": "ESCALATE",
+  "sar_required": true
 }
 ```
 
-### Interactive Documentation
+---
 
-Once the server is running, access:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+## 🚀 Deployment
+
+### Deploy to Render.com
+
+1. **Push code to GitHub**
+2. **Go to Render Dashboard** → New → Blueprint
+3. **Connect your repo** and select `render.yaml`
+4. **Set environment variables** in Render Dashboard:
+   - `GROQ_API_KEY` or `HUGGINGFACE_API_KEY`
+   - `SENTINEL_DB_NEO4J_URI` (use AuraDB for production)
+   - `SENTINEL_DB_NEO4J_PASSWORD`
+   - `TAVILY_API_KEY` (optional)
+
+### Verify Deployment
+
+```bash
+# Health check
+curl https://your-app.onrender.com/health
+
+# Expected response
+{
+  "status": "healthy",
+  "version": "3.0.0",
+  "environment": "production"
+}
+```
+
+### RAG Pipeline Verification Checklist
+
+- [ ] `/health` returns `status: healthy`
+- [ ] Analyze a corporate entity (e.g., "Acme Trading LLC")
+- [ ] Response includes `rag_analysis.entity_searched`
+- [ ] Response includes `llm_analysis.reasoning`
+- [ ] Check logs for `RAG search completed` message
 
 ---
 
-## 🔧 Configuration
+## 🏗️ Tech Stack
 
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GROQ_API_KEY` | Groq API key for LLM access | Required |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://...` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `API_HOST` | API server host | `0.0.0.0` |
-| `API_PORT` | API server port | `8000` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `RISK_THRESHOLD_HIGH` | High risk threshold | `70` |
-| `RISK_THRESHOLD_CRITICAL` | Critical risk threshold | `85` |
-| `ENABLE_CACHE` | Enable LLM response caching | `true` |
-| `CACHE_TTL` | Cache time-to-live (seconds) | `3600` |
-
-### Risk Configuration
-
-```python
-# sentinelai/core/config.py
-
-HIGH_RISK_COUNTRIES = ["AF", "IR", "KP", "RU", "SY", "YE", ...]
-TAX_HAVENS = ["KY", "VG", "PA", "CH", "LU", "MT", ...]
-SANCTIONED_ENTITIES = ["sdgt_list", "ofac_sdn", ...]
-```
-
----
-
-## 🐳 Deployment
-
-### Docker Compose Production
-
-```yaml
-# docker-compose.yml includes:
-# - SentinelAI API (3 replicas)
-# - PostgreSQL 15 with persistence
-# - Redis 7 with persistence
-# - Prometheus monitoring
-# - Grafana dashboards
-```
-
-```bash
-# Production deployment
-docker-compose -f docker-compose.yml up -d
-
-# Scale API servers
-docker-compose up -d --scale api=5
-
-# View logs
-docker-compose logs -f api
-```
-
-### Health Monitoring
-
-```bash
-# Check all services
-curl http://localhost:8000/health
-
-# Prometheus metrics
-curl http://localhost:8000/metrics
-
-# Grafana dashboard
-open http://localhost:3000
-```
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-make test
-
-# Run with coverage
-pytest --cov=sentinelai --cov-report=html
-
-# Run specific test file
-pytest tests/test_agents.py -v
-
-# Run integration tests
-pytest tests/test_api.py -v
-```
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | Vanilla JavaScript, HTML5, CSS3 |
+| **API** | FastAPI, Pydantic, Uvicorn |
+| **LLM** | HuggingFace (Zephyr-7B), Groq (Llama-3) |
+| **RAG** | Tavily, SerpAPI, DuckDuckGo, LangChain |
+| **Graph DB** | Neo4j (AuraDB for cloud) |
+| **Database** | PostgreSQL, SQLAlchemy |
+| **Cache** | Redis |
+| **Deployment** | Docker, Render.com |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-sentinelai/
-├── __init__.py              # Package initialization
-├── cli.py                   # Command-line interface
-├── core/
-│   ├── config.py            # Configuration management
-│   └── logging.py           # Structured logging
-├── models/
-│   ├── database.py          # SQLAlchemy ORM models
-│   └── schemas.py           # Pydantic schemas
-├── agents/
-│   ├── prompts.py           # CoT/ReAct prompt templates
-│   ├── base.py              # Base agent class
-│   ├── specialized.py       # Domain-specific agents
-│   └── orchestrator.py      # LangGraph orchestration
-├── services/
-│   ├── analysis.py          # Analysis service
-│   └── case_management.py   # Case management service
-├── api/
-│   ├── app.py               # FastAPI application
-│   └── routes.py            # API endpoints
-└── tests/
-    ├── conftest.py          # Test fixtures
-    ├── test_agents.py       # Agent tests
-    └── test_api.py          # API tests
+SentinelAI-AML/
+├── frontend/               # Web dashboard
+│   ├── index.html
+│   ├── app.js             # Main application logic
+│   └── styles.css
+├── sentinelai/            # Python backend
+│   ├── api/
+│   │   ├── app.py         # FastAPI application
+│   │   └── routes.py      # API endpoints
+│   ├── services/
+│   │   ├── rag_service.py      # Web search + RAG
+│   │   ├── llm_service.py      # HuggingFace/Groq LLM
+│   │   ├── rag_analysis.py     # Orchestration layer
+│   │   └── analysis.py         # Rule-based engine
+│   ├── core/
+│   │   ├── config.py      # Settings management
+│   │   └── logging.py     # Structured logging
+│   └── models/
+│       └── schemas.py     # Pydantic models
+├── tests/                 # Unit & integration tests
+├── .env.example          # Environment template
+├── requirements.txt      # Python dependencies
+├── render.yaml           # Render.com deployment
+├── Dockerfile            # Container definition
+└── docker-compose.yml    # Local multi-service setup
 ```
-
----
-
-## 🔒 Security Considerations
-
-- **API Authentication**: Implement OAuth2/JWT for production
-- **Data Encryption**: All PII encrypted at rest and in transit
-- **Audit Logging**: Complete action trail for compliance
-- **Rate Limiting**: Built-in protection against abuse
-- **Input Validation**: Strict Pydantic schema validation
-
----
-
-## 📈 Roadmap
-
-- [ ] Real-time streaming analysis
-- [ ] GraphQL API support
-- [ ] Kubernetes Helm charts
-- [ ] ML model fine-tuning pipeline
-- [ ] Multi-tenancy support
-- [ ] Regulatory report automation (CTR, STR)
-- [ ] Integration with SWIFT/ISO 20022
 
 ---
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
 
 ---
@@ -414,17 +376,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 👨‍💻 Author
+## ⚠️ Disclaimer
 
-**Kunal Shaw**
-- GitHub: [@KUNALSHAWW](https://github.com/KUNALSHAWW)
+This software is for educational and research purposes. It is not a substitute for professional AML compliance systems. Always consult with compliance professionals and legal advisors for production AML implementations.
 
 ---
 
-<div align="center">
-
-**Built with ❤️ for financial compliance**
-
-[Report Bug](https://github.com/KUNALSHAWW/SentinelAI-AML/issues) • [Request Feature](https://github.com/KUNALSHAWW/SentinelAI-AML/issues)
-
-</div>
+<p align="center">
+  Built with ❤️ by <a href="https://github.com/KUNALSHAWW">Kunal Shaw</a>
+</p>

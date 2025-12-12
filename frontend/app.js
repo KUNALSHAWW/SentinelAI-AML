@@ -1,38 +1,39 @@
 /**
  * SentinelAI - Enterprise AML Detection Platform
- * Frontend Application JavaScript v2.0
+ * Frontend Application JavaScript v3.0
+ * 
+ * REFACTORED: Now uses real RAG-powered backend API
+ * - Removed hardcoded simulation logic
+ * - Real-time web search for corporate entities
+ * - LLM-powered analysis via HuggingFace
  */
 
 // ============================================
 // Configuration
 // ============================================
 const CONFIG = {
-    // Use relative URL when served from same domain, or absolute for cross-origin
-    API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? 'https://sentinelai-api.onrender.com' 
-        : '',  // Empty string = same origin
+    // CHANGE IS HERE: 
+    // Logic: "Are we running locally? If yes, use localhost:8000. If no (we are on cloud), use relative path."
+    API_BASE_URL: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+        ? 'http://127.0.0.1:8000' 
+        : '', // Empty string means "use the same domain I am currently on"
+
     ENDPOINTS: {
         health: '/health',
-        analyze: '/api/v1/analyze/rules',  // Use rule-based endpoint (always available)
-        analyzeLLM: '/api/v1/analyze',     // LLM-powered endpoint (may timeout)
+        analyze: '/api/v1/analyze/rag',       // NEW: RAG-powered endpoint
+        analyzeRules: '/api/v1/analyze/rules', // Fallback: rule-based endpoint
+        analyzeLLM: '/api/v1/analyze',        // Legacy LLM endpoint
         cases: '/api/v1/cases'
     },
     ANIMATION: {
         counterDuration: 2000,
         typingSpeed: 50
     },
-    ENABLE_LOCAL_SIMULATION: true
-};
-
-// ============================================
-// Risk Data for Local Simulation
-// ============================================
-const RISK_DATA = {
-    HIGH_RISK_COUNTRIES: ['RU', 'IR', 'KP', 'SY', 'CU', 'VE', 'MM', 'BY', 'CD', 'CF', 'LY', 'SO', 'SS', 'YE', 'ZW'],
-    TAX_HAVENS: ['KY', 'VG', 'PA', 'CH', 'LI', 'MC', 'AD', 'JE', 'GG', 'IM', 'BM', 'BS', 'BZ', 'LU', 'MT', 'CY', 'SG', 'HK', 'AE'],
-    GREY_LIST: ['NG', 'PK', 'PH', 'TZ', 'JM', 'AL', 'BB', 'BF', 'CM', 'HR', 'GH', 'GI', 'HT', 'JO', 'ML', 'MZ', 'SN', 'UG', 'ZA'],
-    PEP_INDICATORS: ['government', 'minister', 'president', 'senator', 'official', 'embassy', 'state', 'political', 'military'],
-    SANCTION_KEYWORDS: ['russia', 'russian', 'moscow', 'iran', 'iranian', 'tehran', 'korea', 'pyongyang', 'syria', 'syrian']
+    // Request timeouts
+    TIMEOUTS: {
+        health: 10000,
+        analysis: 120000  // RAG + LLM can take up to 2 minutes
+    }
 };
 
 // ============================================
@@ -42,7 +43,7 @@ const state = {
     isLoading: false,
     apiStatus: 'checking',
     lastAnalysis: null,
-    useLocalSimulation: false
+    analysisMode: 'rag'  // 'rag', 'llm', 'rules'
 };
 
 // ============================================
@@ -58,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeApp() {
-    console.log('🛡️ SentinelAI Frontend v2.0 Initializing...');
+    console.log('🛡️ SentinelAI Frontend v3.0 (RAG-Powered) Initializing...');
     
     cacheElements();
     initNavigation();
@@ -70,7 +71,8 @@ function initializeApp() {
     initCounterAnimation();
     
     console.log('✅ SentinelAI Frontend Ready');
-    console.log('📡 API Endpoint:', CONFIG.API_BASE_URL);
+    console.log('📡 API Endpoint:', CONFIG.API_BASE_URL || window.location.origin);
+    console.log('🧠 Analysis Mode: RAG + LLM (Real AI)');
 }
 
 function cacheElements() {
@@ -235,7 +237,7 @@ async function initAPIStatusCheck() {
     
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUTS.health);
         
         const response = await fetch(`${CONFIG.API_BASE_URL}/health`, {
             method: 'GET',
@@ -247,17 +249,17 @@ async function initAPIStatusCheck() {
         if (response.ok) {
             const data = await response.json();
             state.apiStatus = 'online';
-            state.useLocalSimulation = false;
-            updateAPIStatus('online', 'API Online');
+            state.analysisMode = 'rag';
+            updateAPIStatus('online', 'AI Ready');
             console.log('✅ API Status:', data);
         } else {
             throw new Error('API returned non-OK status');
         }
     } catch (error) {
         state.apiStatus = 'offline';
-        state.useLocalSimulation = CONFIG.ENABLE_LOCAL_SIMULATION;
-        updateAPIStatus('simulation', 'Demo Mode');
-        console.warn('⚠️ API unavailable, using local simulation:', error.message);
+        state.analysisMode = 'rules';
+        updateAPIStatus('warning', 'Fallback Mode');
+        console.warn('⚠️ API check failed, will try on analysis:', error.message);
     }
 }
 
@@ -267,7 +269,7 @@ function updateAPIStatus(status, text) {
             'checking': '#f59e0b',
             'online': '#10b981',
             'offline': '#ef4444',
-            'simulation': '#8b5cf6'
+            'warning': '#f59e0b'
         };
         elements.statusDot.style.background = colors[status] || '#6b7280';
     }
@@ -286,9 +288,14 @@ function initForm() {
     });
 }
 
+/**
+ * Main transaction analysis function
+ * Now calls real RAG-powered backend API
+ */
 async function analyzeTransaction() {
     if (state.isLoading) return;
     
+    // Gather form data
     const amount = parseFloat(elements.amount?.value) || 0;
     const originCountry = elements.originCountry?.value || 'US';
     const destCountry = elements.destCountry?.value || 'US';
@@ -297,6 +304,7 @@ async function analyzeTransaction() {
     const customerType = elements.customerType?.value || 'INDIVIDUAL';
     const accountAge = parseInt(elements.accountAge?.value) || 365;
     
+    // Validation
     if (!amount || amount <= 0) {
         showNotification('Please enter a valid amount', 'error');
         return;
@@ -304,8 +312,17 @@ async function analyzeTransaction() {
     
     state.isLoading = true;
     updateLoadingState(true);
-    showNotification('Analyzing transaction...', 'info');
     
+    // Determine if RAG will be triggered (corporate entity check)
+    const isCorporate = isCorporateEntity(customerName, customerType);
+    const statusMessage = isCorporate 
+        ? 'Searching entity intelligence & analyzing with AI...' 
+        : 'Analyzing transaction with AI...';
+    
+    showNotification(statusMessage, 'info');
+    showAnalysisProgress(isCorporate);
+    
+    // Build request payload for RAG API
     const requestData = {
         transaction: {
             amount: amount,
@@ -320,55 +337,73 @@ async function analyzeTransaction() {
             customer_type: customerType.toLowerCase(),
             account_age_days: accountAge
         },
-        enable_llm_analysis: true
+        enable_rag: true,
+        enable_llm: true
     };
     
-    console.log('📤 Analysis Request:', requestData);
+    console.log('📤 RAG Analysis Request:', requestData);
     
     try {
-        let result;
+        // Call the real RAG API
+        const result = await callRAGAPI(requestData);
         
-        if (state.useLocalSimulation) {
-            result = await simulateAnalysis(requestData);
-        } else {
-            result = await callAPI(requestData);
-        }
-        
-        console.log('📥 Analysis Result:', result);
+        console.log('📥 RAG Analysis Result:', result);
         state.lastAnalysis = result;
         displayResults(result);
-        showNotification('Analysis completed successfully!', 'success');
+        
+        const modeLabel = result._rag_enabled ? 'RAG + LLM' : 'LLM';
+        showNotification(`Analysis completed with ${modeLabel}!`, 'success');
         
     } catch (error) {
-        console.error('❌ Analysis Error:', error);
+        console.error('❌ RAG Analysis Error:', error);
         
-        if (CONFIG.ENABLE_LOCAL_SIMULATION && !state.useLocalSimulation) {
-            console.log('🔄 Falling back to local simulation...');
-            state.useLocalSimulation = true;
-            updateAPIStatus('simulation', 'Demo Mode');
-            
-            try {
-                const result = await simulateAnalysis(requestData);
-                state.lastAnalysis = result;
-                displayResults(result);
-                showNotification('Analysis completed (Demo Mode)', 'success');
-            } catch (simError) {
-                showNotification(`Analysis failed: ${simError.message}`, 'error');
-                displayErrorResult(simError.message);
-            }
-        } else {
+        // Attempt fallback to rule-based endpoint
+        console.log('🔄 Attempting fallback to rule-based analysis...');
+        
+        try {
+            const fallbackResult = await callRulesAPI(requestData);
+            state.lastAnalysis = fallbackResult;
+            displayResults(fallbackResult);
+            showNotification('Analysis completed (Rule-Based Fallback)', 'warning');
+        } catch (fallbackError) {
             showNotification(`Analysis failed: ${error.message}`, 'error');
             displayErrorResult(error.message);
         }
     } finally {
         state.isLoading = false;
         updateLoadingState(false);
+        hideAnalysisProgress();
     }
 }
 
-async function callAPI(requestData) {
+/**
+ * Check if customer represents a corporate entity
+ * (determines if RAG web search will be triggered)
+ */
+function isCorporateEntity(customerName, customerType) {
+    if (customerType?.toUpperCase() === 'CORPORATE' || 
+        customerType?.toUpperCase() === 'FINANCIAL_INSTITUTION') {
+        return true;
+    }
+    
+    const corporateIndicators = [
+        'ltd', 'llc', 'inc', 'corp', 'corporation', 'limited',
+        'gmbh', 'plc', 'llp', 'lp', 'sa', 'ag', 'nv', 'bv',
+        'company', 'co.', 'holdings', 'group', 'international',
+        'enterprises', 'partners', 'investments', 'capital',
+        'bank', 'financial', 'trust', 'fund', 'asset'
+    ];
+    
+    const nameLower = customerName.toLowerCase();
+    return corporateIndicators.some(indicator => nameLower.includes(indicator));
+}
+
+/**
+ * Call the RAG-powered analysis API
+ */
+async function callRAGAPI(requestData) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUTS.analysis);
     
     try {
         const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.analyze}`, {
@@ -398,337 +433,130 @@ async function callAPI(requestData) {
     } catch (error) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            throw new Error('Request timeout - API may be starting up');
+            throw new Error('Request timeout - RAG analysis is taking longer than expected');
         }
         throw error;
     }
 }
 
-// ============================================
-// Local Simulation (AI-like Analysis)
-// ============================================
-async function simulateAnalysis(requestData) {
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+/**
+ * Call the rule-based analysis API (fallback)
+ */
+async function callRulesAPI(requestData) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
-    const tx = requestData.transaction;
-    const customer = requestData.customer;
-    
-    let riskScore = 0;
-    const riskFactors = [];
-    const alerts = [];
-    const decisionPath = ['entry:initial_screening'];
-    
-    decisionPath.push('geographic_risk:analyzing');
-    
-    const originUpper = tx.origin_country.toUpperCase();
-    const destUpper = tx.destination_country.toUpperCase();
-    
-    if (RISK_DATA.HIGH_RISK_COUNTRIES.includes(originUpper)) {
-        riskScore += 25;
-        riskFactors.push({
-            code: 'HIGH_RISK_ORIGIN',
-            description: `High-risk origin country: ${getCountryName(originUpper)}`,
-            severity: 'HIGH',
-            score: 25,
-            category: 'geographic'
+    try {
+        // Convert to the expected schema format
+        const rulesRequestData = {
+            transaction: {
+                amount: requestData.transaction.amount,
+                currency: requestData.transaction.currency,
+                origin_country: requestData.transaction.origin_country,
+                destination_country: requestData.transaction.destination_country,
+                transaction_type: requestData.transaction.transaction_type,
+                timestamp: requestData.transaction.timestamp
+            },
+            customer: {
+                name: requestData.customer.name,
+                customer_type: requestData.customer.customer_type,
+                account_age_days: requestData.customer.account_age_days
+            },
+            enable_llm_analysis: false
+        };
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.analyzeRules}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-API-Key': 'demo-key'
+            },
+            body: JSON.stringify(rulesRequestData),
+            signal: controller.signal
         });
-        alerts.push({
-            type: 'HIGH_RISK_JURISDICTION',
-            severity: 'HIGH',
-            title: 'High-Risk Origin Country',
-            description: `Transaction originates from ${getCountryName(originUpper)}, which is classified as a high-risk jurisdiction for money laundering.`
-        });
-    }
-    
-    if (RISK_DATA.HIGH_RISK_COUNTRIES.includes(destUpper)) {
-        riskScore += 25;
-        riskFactors.push({
-            code: 'HIGH_RISK_DESTINATION',
-            description: `High-risk destination country: ${getCountryName(destUpper)}`,
-            severity: 'HIGH',
-            score: 25,
-            category: 'geographic'
-        });
-    }
-    
-    if (RISK_DATA.TAX_HAVENS.includes(destUpper)) {
-        riskScore += 15;
-        riskFactors.push({
-            code: 'TAX_HAVEN_DESTINATION',
-            description: `Destination is known tax haven: ${getCountryName(destUpper)}`,
-            severity: 'MEDIUM',
-            score: 15,
-            category: 'geographic'
-        });
-        alerts.push({
-            type: 'TAX_HAVEN',
-            severity: 'MEDIUM',
-            title: 'Tax Haven Destination',
-            description: `Funds being transferred to ${getCountryName(destUpper)}, a jurisdiction commonly used for tax avoidance and asset hiding.`
-        });
-    }
-    
-    if (RISK_DATA.GREY_LIST.includes(originUpper) || RISK_DATA.GREY_LIST.includes(destUpper)) {
-        riskScore += 10;
-        riskFactors.push({
-            code: 'GREY_LIST_JURISDICTION',
-            description: 'Transaction involves FATF grey list country',
-            severity: 'MEDIUM',
-            score: 10,
-            category: 'geographic'
-        });
-    }
-    
-    decisionPath.push('amount_analysis:analyzing');
-    
-    if (tx.amount > 100000) {
-        riskScore += 15;
-        riskFactors.push({
-            code: 'LARGE_TRANSACTION',
-            description: `Large transaction amount: $${tx.amount.toLocaleString()}`,
-            severity: 'MEDIUM',
-            score: 15,
-            category: 'transaction'
-        });
-        alerts.push({
-            type: 'LARGE_TRANSACTION',
-            severity: 'MEDIUM',
-            title: 'Large Value Transaction',
-            description: `Transaction amount of $${tx.amount.toLocaleString()} exceeds standard monitoring threshold.`
-        });
-    }
-    
-    if (tx.amount >= 9000 && tx.amount <= 10000) {
-        riskScore += 20;
-        riskFactors.push({
-            code: 'STRUCTURING_INDICATOR',
-            description: 'Amount near reporting threshold - possible structuring',
-            severity: 'HIGH',
-            score: 20,
-            category: 'behavioral'
-        });
-        alerts.push({
-            type: 'STRUCTURING',
-            severity: 'HIGH',
-            title: 'Possible Structuring',
-            description: 'Transaction amount is suspiciously close to $10,000 reporting threshold, indicating possible structuring to avoid reporting requirements.'
-        });
-    }
-    
-    decisionPath.push('customer_analysis:analyzing');
-    
-    const customerNameLower = customer.name.toLowerCase();
-    
-    for (const keyword of RISK_DATA.SANCTION_KEYWORDS) {
-        if (customerNameLower.includes(keyword)) {
-            riskScore += 30;
-            riskFactors.push({
-                code: 'SANCTIONS_KEYWORD_MATCH',
-                description: `Customer name contains sanctions-related keyword: "${keyword}"`,
-                severity: 'CRITICAL',
-                score: 30,
-                category: 'sanctions'
-            });
-            alerts.push({
-                type: 'SANCTIONS_ALERT',
-                severity: 'CRITICAL',
-                title: 'Potential Sanctions Concern',
-                description: `Customer name "${customer.name}" contains keywords associated with sanctioned jurisdictions.`
-            });
-            break;
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
-    }
-    
-    for (const indicator of RISK_DATA.PEP_INDICATORS) {
-        if (customerNameLower.includes(indicator)) {
-            riskScore += 15;
-            riskFactors.push({
-                code: 'PEP_INDICATOR',
-                description: `Customer name suggests politically exposed person: "${indicator}"`,
-                severity: 'MEDIUM',
-                score: 15,
-                category: 'pep'
-            });
-            break;
-        }
-    }
-    
-    if (customer.customer_type === 'corporate') {
-        riskScore += 5;
-        riskFactors.push({
-            code: 'CORPORATE_ENTITY',
-            description: 'Corporate entities require enhanced due diligence',
-            severity: 'LOW',
-            score: 5,
-            category: 'customer'
-        });
-    }
-    
-    if (customer.account_age_days < 90) {
-        riskScore += 10;
-        riskFactors.push({
-            code: 'NEW_ACCOUNT',
-            description: `Account is only ${customer.account_age_days} days old`,
-            severity: 'MEDIUM',
-            score: 10,
-            category: 'behavioral'
-        });
-        alerts.push({
-            type: 'NEW_ACCOUNT_ACTIVITY',
-            severity: 'MEDIUM',
-            title: 'New Account High Activity',
-            description: `Large transaction on account that is only ${customer.account_age_days} days old.`
-        });
-    }
-    
-    decisionPath.push('transaction_type:analyzing');
-    
-    if (tx.transaction_type === 'CRYPTO') {
-        riskScore += 15;
-        riskFactors.push({
-            code: 'CRYPTO_TRANSACTION',
-            description: 'Cryptocurrency transactions carry elevated risk',
-            severity: 'MEDIUM',
-            score: 15,
-            category: 'crypto'
-        });
-        alerts.push({
-            type: 'CRYPTO_RISK',
-            severity: 'MEDIUM',
-            title: 'Cryptocurrency Transaction',
-            description: 'Virtual asset transactions require enhanced monitoring due to pseudonymous nature.'
-        });
-    }
-    
-    if (tx.transaction_type === 'CASH') {
-        riskScore += 10;
-        riskFactors.push({
-            code: 'CASH_TRANSACTION',
-            description: 'Cash transactions have higher AML risk',
-            severity: 'MEDIUM',
-            score: 10,
-            category: 'transaction'
-        });
-    }
-    
-    decisionPath.push('risk_scoring:calculating');
-    
-    riskScore = Math.min(riskScore, 100);
-    
-    let riskLevel;
-    if (riskScore >= 80) riskLevel = 'CRITICAL';
-    else if (riskScore >= 60) riskLevel = 'HIGH';
-    else if (riskScore >= 40) riskLevel = 'MEDIUM';
-    else riskLevel = 'LOW';
-    
-    let recommendedAction;
-    let sarRequired = false;
-    
-    if (riskScore >= 75) {
-        recommendedAction = 'BLOCK';
-        sarRequired = true;
-    } else if (riskScore >= 50) {
-        recommendedAction = 'ESCALATE';
-        sarRequired = riskScore >= 60;
-    } else if (riskScore >= 30) {
-        recommendedAction = 'REVIEW';
-    } else {
-        recommendedAction = 'APPROVE';
-    }
-    
-    decisionPath.push(`decision:${recommendedAction.toLowerCase()}`);
-    
-    const reasoning = generateReasoning(tx, customer, riskFactors, riskScore, riskLevel);
-    
-    return {
-        request_id: generateUUID(),
-        processed_at: new Date().toISOString(),
-        processing_time_ms: Math.floor(1500 + Math.random() * 1000),
-        risk_assessment: {
-            risk_score: riskScore,
-            risk_level: riskLevel,
-            risk_factors: riskFactors,
-            decision_path: decisionPath,
-            alerts_triggered: alerts.length
-        },
-        llm_analysis: {
-            summary: `Transaction flagged as ${riskLevel} risk with score ${riskScore}/100`,
-            risk_indicators: riskFactors.map(rf => rf.description),
-            reasoning: reasoning,
-            confidence_score: 0.85 + Math.random() * 0.1,
-            recommendation: recommendedAction
-        },
-        alerts: alerts,
-        recommended_action: recommendedAction,
-        action_required: riskScore >= 30,
-        next_steps: getNextSteps(recommendedAction),
-        sar_required: sarRequired,
-        _simulation: true
-    };
-}
-
-function generateReasoning(tx, customer, factors, score, level) {
-    const lines = [];
-    
-    lines.push(`ANALYSIS SUMMARY`);
-    lines.push(`================`);
-    lines.push(`Transaction: $${tx.amount.toLocaleString()} ${tx.transaction_type}`);
-    lines.push(`Route: ${getCountryName(tx.origin_country)} → ${getCountryName(tx.destination_country)}`);
-    lines.push(`Customer: ${customer.name} (${customer.customer_type})`);
-    lines.push(``);
-    lines.push(`RISK ASSESSMENT: ${level} (Score: ${score}/100)`);
-    lines.push(``);
-    
-    if (factors.length > 0) {
-        lines.push(`KEY RISK INDICATORS:`);
-        factors.forEach((f, i) => {
-            lines.push(`${i + 1}. [${f.severity}] ${f.description}`);
-        });
-    } else {
-        lines.push(`No significant risk indicators detected.`);
-    }
-    
-    lines.push(``);
-    lines.push(`REASONING CHAIN:`);
-    lines.push(`• Geographic analysis: ${factors.filter(f => f.category === 'geographic').length} factors identified`);
-    lines.push(`• Transaction analysis: ${factors.filter(f => f.category === 'transaction').length} factors identified`);
-    lines.push(`• Customer analysis: ${factors.filter(f => f.category === 'customer' || f.category === 'behavioral').length} factors identified`);
-    lines.push(`• Sanctions/PEP screening: ${factors.filter(f => f.category === 'sanctions' || f.category === 'pep').length} matches`);
-    
-    return lines.join('\n');
-}
-
-function getNextSteps(action) {
-    switch (action) {
-        case 'BLOCK':
-            return ['Immediately block transaction', 'File Suspicious Activity Report (SAR)', 'Escalate to compliance officer', 'Freeze related accounts for review'];
-        case 'ESCALATE':
-            return ['Escalate to senior analyst', 'Gather additional documentation', 'Review customer history', 'Consider enhanced due diligence'];
-        case 'REVIEW':
-            return ['Manual review required', 'Verify customer documentation', 'Check transaction purpose'];
-        case 'APPROVE':
-            return ['Transaction may proceed', 'Standard monitoring applies'];
-        default:
-            return ['Review case details'];
+        
+        const result = await response.json();
+        result._simulation = false;
+        result._fallback = true;
+        return result;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
     }
 }
 
-function getCountryName(code) {
-    const countries = {
-        'US': 'United States', 'RU': 'Russia', 'CN': 'China', 'IR': 'Iran', 'KP': 'North Korea',
-        'KY': 'Cayman Islands', 'CH': 'Switzerland', 'PA': 'Panama', 'VG': 'British Virgin Islands',
-        'GB': 'United Kingdom', 'SG': 'Singapore', 'AE': 'UAE', 'NG': 'Nigeria', 'HK': 'Hong Kong',
-        'SY': 'Syria', 'CU': 'Cuba', 'VE': 'Venezuela', 'MM': 'Myanmar', 'BY': 'Belarus'
-    };
-    return countries[code] || code;
-}
-
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
+/**
+ * Show analysis progress indicator
+ */
+function showAnalysisProgress(includeRAG) {
+    if (!elements.resultsPanel) return;
+    
+    const steps = includeRAG ? [
+        { icon: 'search', text: 'Searching entity intelligence...', delay: 0 },
+        { icon: 'globe', text: 'Retrieving web sources...', delay: 2000 },
+        { icon: 'newspaper', text: 'Checking adverse media...', delay: 4000 },
+        { icon: 'brain', text: 'Running AI analysis...', delay: 6000 },
+        { icon: 'chart-line', text: 'Calculating risk score...', delay: 9000 }
+    ] : [
+        { icon: 'brain', text: 'Running AI analysis...', delay: 0 },
+        { icon: 'chart-line', text: 'Calculating risk score...', delay: 3000 }
+    ];
+    
+    elements.resultsPanel.innerHTML = `
+        <div class="analysis-progress" style="padding: 40px; text-align: center;">
+            <div class="progress-spinner" style="margin-bottom: 24px;">
+                <div style="width: 60px; height: 60px; border: 3px solid rgba(99, 102, 241, 0.2); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            </div>
+            <div id="progressSteps" style="text-align: left; max-width: 300px; margin: 0 auto;">
+                ${steps.map((step, i) => `
+                    <div class="progress-step" data-step="${i}" style="display: flex; align-items: center; gap: 12px; padding: 8px 0; opacity: 0.4; transition: opacity 0.3s;">
+                        <i class="fas fa-${step.icon}" style="color: #6366f1; width: 20px;"></i>
+                        <span>${step.text}</span>
+                        <i class="fas fa-check" style="color: #10b981; margin-left: auto; display: none;"></i>
+                    </div>
+                `).join('')}
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: var(--text-muted);">
+                ${includeRAG ? 'RAG + LLM analysis may take 15-60 seconds' : 'LLM analysis in progress...'}
+            </p>
+        </div>
+    `;
+    
+    // Add spin animation if not exists
+    if (!document.getElementById('spinAnimation')) {
+        const style = document.createElement('style');
+        style.id = 'spinAnimation';
+        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    }
+    
+    // Animate progress steps
+    steps.forEach((step, index) => {
+        setTimeout(() => {
+            const stepEl = document.querySelector(`[data-step="${index}"]`);
+            if (stepEl) {
+                stepEl.style.opacity = '1';
+                // Mark previous step as complete
+                if (index > 0) {
+                    const prevStep = document.querySelector(`[data-step="${index - 1}"]`);
+                    if (prevStep) {
+                        prevStep.querySelector('.fa-check').style.display = 'inline';
+                    }
+                }
+            }
+        }, step.delay);
     });
+}
+
+function hideAnalysisProgress() {
+    // Progress will be replaced by results
 }
 
 function updateLoadingState(isLoading) {
@@ -752,10 +580,12 @@ function displayResults(result) {
     const riskFactors = result.risk_assessment?.risk_factors || [];
     const alerts = result.alerts || [];
     const llmAnalysis = result.llm_analysis || {};
+    const ragAnalysis = result.rag_analysis || null;
     const recommendedAction = result.recommended_action || 'REVIEW';
     const nextSteps = result.next_steps || [];
     const sarRequired = result.sar_required || false;
-    const isSimulation = result._simulation || false;
+    const isRAGEnabled = result._rag_enabled || false;
+    const isFallback = result._fallback || false;
     
     const riskLevelClass = riskLevel.toLowerCase();
     const actionClass = recommendedAction === 'BLOCK' ? 'block' : 
@@ -764,12 +594,14 @@ function displayResults(result) {
     
     elements.resultsPanel.innerHTML = `
         <div class="analysis-result" style="animation: fadeIn 0.5s ease;">
-            ${isSimulation ? `
-                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: #a78bfa;">
-                    <i class="fas fa-flask"></i> <strong>Demo Mode</strong> - Results generated by local AI simulation
-                </div>
-            ` : ''}
+            <!-- Analysis Mode Badge -->
+            <div style="background: ${isRAGEnabled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)'}; border: 1px solid ${isRAGEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(99, 102, 241, 0.3)'}; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: ${isRAGEnabled ? '#10b981' : '#6366f1'};">
+                <i class="fas fa-${isRAGEnabled ? 'robot' : 'brain'}"></i> 
+                <strong>${isRAGEnabled ? 'RAG + LLM Analysis' : isFallback ? 'Rule-Based Analysis' : 'LLM Analysis'}</strong>
+                ${isRAGEnabled ? ' - Entity intelligence retrieved via web search' : ''}
+            </div>
             
+            <!-- Risk Score Header -->
             <div class="risk-header">
                 <div class="risk-score-circle ${riskLevelClass}">
                     <span class="risk-score-value">${Math.round(riskScore)}</span>
@@ -779,9 +611,48 @@ function displayResults(result) {
                     <h3>Analysis Complete</h3>
                     <span class="risk-level-badge ${riskLevelClass}">${riskLevel} Risk</span>
                     ${sarRequired ? '<span class="risk-level-badge high" style="margin-left: 8px;"><i class="fas fa-exclamation-triangle"></i> SAR Required</span>' : ''}
+                    ${llmAnalysis.confidence_score ? `<span style="margin-left: 8px; font-size: 12px; color: var(--text-muted);">Confidence: ${(llmAnalysis.confidence_score * 100).toFixed(0)}%</span>` : ''}
                 </div>
             </div>
             
+            <!-- RAG Analysis Section (if enabled) -->
+            ${ragAnalysis ? `
+                <div class="result-section" style="background: rgba(99, 102, 241, 0.05); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <h4><i class="fas fa-search"></i> Entity Intelligence (RAG)</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 12px;">
+                        <div>
+                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Entity Searched</span>
+                            <p style="margin: 4px 0; font-weight: 500;">${ragAnalysis.entity_searched}</p>
+                        </div>
+                        <div>
+                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Sources Analyzed</span>
+                            <p style="margin: 4px 0; font-weight: 500;">${ragAnalysis.sources_analyzed || 0}</p>
+                        </div>
+                        <div>
+                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Adverse Media</span>
+                            <p style="margin: 4px 0; font-weight: 500; color: ${ragAnalysis.adverse_media_found ? '#ef4444' : '#10b981'};">
+                                ${ragAnalysis.adverse_media_found ? '⚠️ DETECTED' : '✓ None Found'}
+                            </p>
+                        </div>
+                        ${ragAnalysis.sanctions_indicators?.length ? `
+                            <div>
+                                <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Sanctions Keywords</span>
+                                <p style="margin: 4px 0; font-weight: 500; color: #ef4444;">${ragAnalysis.sanctions_indicators.join(', ')}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${ragAnalysis.key_findings?.length ? `
+                        <div style="margin-top: 12px;">
+                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Key Findings</span>
+                            <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+                                ${ragAnalysis.key_findings.slice(0, 5).map(f => `<li>${f}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            <!-- Alerts Section -->
             ${alerts.length > 0 ? `
                 <div class="result-section">
                     <h4><i class="fas fa-exclamation-triangle"></i> Alerts Triggered (${alerts.length})</h4>
@@ -805,6 +676,7 @@ function displayResults(result) {
                 </div>
             `}
             
+            <!-- Risk Factors -->
             ${riskFactors.length > 0 ? `
                 <div class="result-section">
                     <h4><i class="fas fa-list"></i> Risk Factors (${riskFactors.length})</h4>
@@ -829,11 +701,13 @@ function displayResults(result) {
                 </div>
             ` : ''}
             
+            <!-- AI Analysis -->
             <div class="result-section">
                 <h4><i class="fas fa-brain"></i> AI Analysis</h4>
                 <div class="reasoning-text">${(llmAnalysis.reasoning || 'Analysis completed.').replace(/\n/g, '<br>')}</div>
             </div>
             
+            <!-- Actions -->
             <div class="result-section" style="display: flex; gap: 24px; flex-wrap: wrap;">
                 <div>
                     <h4><i class="fas fa-gavel"></i> Recommended Action</h4>
@@ -850,9 +724,11 @@ function displayResults(result) {
                 </div>
             </div>
             
+            <!-- Footer -->
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-muted);">
                 <i class="fas fa-clock"></i> Processed in ${result.processing_time_ms || 0}ms
                 <span style="margin-left: 16px;"><i class="fas fa-fingerprint"></i> ${result.request_id?.substring(0, 8) || 'N/A'}</span>
+                ${isRAGEnabled ? '<span style="margin-left: 16px;"><i class="fas fa-globe"></i> RAG Enabled</span>' : ''}
             </div>
         </div>
     `;
@@ -878,6 +754,15 @@ function displayErrorResult(errorMessage) {
                     <i class="fas fa-bug" style="color: #ef4444;"></i>
                     <span>${errorMessage}</span>
                 </div>
+            </div>
+            <div class="result-section">
+                <h4><i class="fas fa-lightbulb"></i> Troubleshooting</h4>
+                <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 13px;">
+                    <li>Check if the API server is running</li>
+                    <li>Verify API keys are configured (HUGGINGFACE_API_KEY, GROQ_API_KEY)</li>
+                    <li>Try again in a few moments (API may be warming up)</li>
+                    <li>Check browser console for detailed error information</li>
+                </ul>
             </div>
         </div>
     `;
@@ -1058,5 +943,9 @@ if (!document.getElementById('notificationStyles')) {
     document.head.appendChild(style);
 }
 
-console.log('%c🛡️ SentinelAI v2.0', 'font-size: 24px; font-weight: bold; color: #6366f1;');
+// ============================================
+// Console Branding
+// ============================================
+console.log('%c🛡️ SentinelAI v3.0', 'font-size: 24px; font-weight: bold; color: #6366f1;');
 console.log('%cFinancial Crime Intelligence Platform', 'font-size: 14px; color: #a1a1aa;');
+console.log('%c🧠 RAG + LLM Powered Analysis', 'font-size: 12px; color: #10b981;');

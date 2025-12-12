@@ -1,5 +1,26 @@
+# =============================================================================
 # Render.com Blueprint Specification
+# =============================================================================
 # This file defines the infrastructure for deploying SentinelAI on Render
+# 
+# DEPLOYMENT STEPS:
+# 1. Push code to GitHub
+# 2. Go to Render Dashboard → New → Blueprint
+# 3. Connect your GitHub repo and select this render.yaml
+# 4. Set the secret environment variables in Render Dashboard:
+#    - GROQ_API_KEY (required)
+#    - HUGGINGFACE_API_KEY (required)
+#    - TAVILY_API_KEY (optional, for RAG)
+#    - SERPAPI_KEY (optional, for RAG)
+#    - NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD (if using cloud Neo4j)
+#
+# NEO4J PRODUCTION NOTE:
+# For production, use Neo4j AuraDB (free tier available):
+# 1. Create account at https://neo4j.com/cloud/aura-free/
+# 2. Create a new database instance
+# 3. Copy the connection URI (neo4j+s://xxxxx.databases.neo4j.io)
+# 4. Add NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD to Render environment
+# =============================================================================
 
 databases:
   # PostgreSQL Database (Free tier: 1GB storage, 256MB RAM)
@@ -23,22 +44,53 @@ services:
     envVars:
       - key: SENTINEL_ENVIRONMENT
         value: production
+      
+      # ========== LLM Provider Configuration ==========
       - key: SENTINEL_LLM_PROVIDER
         value: groq
       - key: GROQ_API_KEY
-        sync: false
+        sync: false  # Set manually in Render Dashboard
       - key: SENTINEL_LLM_GROQ_MODEL
         value: llama-3.3-70b-versatile
+      
+      # ========== HuggingFace Configuration (for RAG) ==========
+      - key: HUGGINGFACE_API_KEY
+        sync: false  # Set manually in Render Dashboard
+      - key: SENTINEL_LLM_HUGGINGFACE_MODEL
+        value: HuggingFaceH4/zephyr-7b-beta
+      
+      # ========== RAG Search API Keys (optional) ==========
+      - key: TAVILY_API_KEY
+        sync: false  # Set manually in Render Dashboard
+      - key: SERPAPI_KEY
+        sync: false  # Set manually in Render Dashboard
+      
+      # ========== LLM Parameters ==========
       - key: SENTINEL_LLM_TEMPERATURE
         value: "0.0"
       - key: SENTINEL_LLM_MAX_TOKENS
         value: "4096"
+      - key: SENTINEL_LLM_TIMEOUT
+        value: "90"
+      
+      # ========== Neo4j Graph Database (Cloud) ==========
+      # Use Neo4j AuraDB for production - https://neo4j.com/cloud/aura-free/
+      - key: SENTINEL_DB_NEO4J_URI
+        sync: false  # Set to your AuraDB URI: neo4j+s://xxxxx.databases.neo4j.io
+      - key: SENTINEL_DB_NEO4J_USER
+        value: neo4j
+      - key: SENTINEL_DB_NEO4J_PASSWORD
+        sync: false  # Set manually in Render Dashboard
+      
+      # ========== PostgreSQL Database ==========
       - key: DATABASE_URL
         fromDatabase:
           name: sentinelai-db
           property: connectionString
       - key: REDIS_URL
         value: ""
+      
+      # ========== API Server ==========
       - key: SENTINEL_API_HOST
         value: 0.0.0.0
       - key: SENTINEL_API_PORT

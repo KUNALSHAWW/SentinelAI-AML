@@ -3,14 +3,16 @@ SentinelAI API Routes
 =====================
 
 API endpoints for transaction analysis, case management, and system operations.
+Includes RAG-powered analysis with real-time web search and LLM integration.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.security import APIKeyHeader
+from pydantic import BaseModel, Field
 
 from sentinelai.core.config import settings
 from sentinelai.core.logging import get_logger
@@ -28,6 +30,48 @@ from sentinelai.models.schemas import (
     CaseStatusEnum,
     ErrorResponse,
 )
+
+# RAG Analysis Service (lazy loaded)
+_rag_analysis_service = None
+
+
+def get_rag_analysis_service():
+    """Lazy initialization of RAG Analysis Service"""
+    global _rag_analysis_service
+    if _rag_analysis_service is None:
+        from sentinelai.services.rag_analysis import RAGAnalysisService
+        _rag_analysis_service = RAGAnalysisService()
+    return _rag_analysis_service
+
+
+# Request/Response models for RAG endpoint
+class RAGAnalysisRequest(BaseModel):
+    """Request model for RAG-powered analysis"""
+    transaction: Dict[str, Any] = Field(..., description="Transaction details")
+    customer: Dict[str, Any] = Field(..., description="Customer information")
+    enable_rag: bool = Field(True, description="Enable web search for entity intelligence")
+    enable_llm: bool = Field(True, description="Enable LLM-powered analysis")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "transaction": {
+                    "amount": 500000,
+                    "currency": "USD",
+                    "origin_country": "US",
+                    "destination_country": "KY",
+                    "transaction_type": "WIRE_TRANSFER",
+                    "timestamp": "2024-01-15T10:30:00Z"
+                },
+                "customer": {
+                    "name": "Moscow Trading LLC",
+                    "customer_type": "CORPORATE",
+                    "account_age_days": 45
+                },
+                "enable_rag": True,
+                "enable_llm": True
+            }
+        }
 from sentinelai.services.analysis import AnalysisService
 from sentinelai.services.case_management import CaseManagementService
 
@@ -172,6 +216,77 @@ async def analyze_transaction(
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/api/v1/analyze/rag",
+    tags=["Analysis"],
+    summary="RAG-Powered Analysis",
+    description="Perform comprehensive AML analysis using Retrieval-Augmented Generation (RAG) with real-time web search and LLM."
+)
+async def analyze_with_rag(
+    request: RAGAnalysisRequest,
+    background_tasks: BackgroundTasks,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Analyze a transaction using RAG (Retrieval-Augmented Generation) for enhanced due diligence.
+    
+    This endpoint performs:
+    1. **Entity Intelligence** - Real-time web search for corporate entities
+       - Business nature and registration details
+       - Adverse media detection (fraud, sanctions, investigations)
+       - Key management personnel
+    2. **LLM Analysis** - AI-powered risk assessment using specialized prompts
+       - HuggingFace Inference API integration
+       - Specialized financial crime detection models
+       - Structured JSON output with risk scoring
+    3. **Risk Scoring** - Comprehensive assessment combining:
+       - Geographic risk factors
+       - Transaction pattern analysis  
+       - Customer profile evaluation
+       - RAG context correlation
+    
+    **When RAG is triggered:**
+    - Customer is a Corporate Entity (Ltd, Inc, LLC, Corp, etc.)
+    - Customer type is explicitly CORPORATE or FINANCIAL_INSTITUTION
+    - Customer name contains bank, financial, trust, fund keywords
+    
+    **Response includes:**
+    - Risk score (0-100) with confidence level
+    - Flagged issues and red flags
+    - Detailed reasoning from LLM
+    - SAR recommendation
+    - RAG search results and findings
+    """
+    try:
+        service = get_rag_analysis_service()
+        
+        result = await service.analyze(
+            transaction=request.transaction,
+            customer=request.customer,
+            enable_rag=request.enable_rag,
+            enable_llm=request.enable_llm
+        )
+        
+        response_dict = result.to_dict()
+        
+        # Background logging
+        background_tasks.add_task(
+            log_analysis,
+            request_id=response_dict["request_id"],
+            risk_score=response_dict["risk_assessment"]["risk_score"],
+            api_key=api_key or "demo"
+        )
+        
+        return response_dict
+        
+    except Exception as e:
+        logger.error(f"RAG Analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"RAG Analysis failed: {str(e)}"
         )
 
 
