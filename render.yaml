@@ -1,0 +1,53 @@
+# Render.com Blueprint Specification
+# This file defines the infrastructure for deploying SentinelAI on Render
+
+databases:
+  # PostgreSQL Database (Free tier: 1GB storage, 256MB RAM)
+  - name: sentinelai-db
+    plan: free
+    databaseName: sentinelai
+    user: sentinelai
+    ipAllowList: []
+
+services:
+  # Main API Service
+  - type: web
+    name: sentinelai-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    repo: https://github.com/KUNALSHAWW/SentinelAI-AML
+    branch: main
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SENTINEL_ENVIRONMENT
+        value: production
+      - key: SENTINEL_LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SENTINEL_LLM_GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: SENTINEL_LLM_TEMPERATURE
+        value: "0.0"
+      - key: SENTINEL_LLM_MAX_TOKENS
+        value: "4096"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sentinelai-db
+          property: connectionString
+      - key: REDIS_URL
+        value: ""
+      - key: SENTINEL_API_HOST
+        value: 0.0.0.0
+      - key: SENTINEL_API_PORT
+        value: "10000"
+      - key: SENTINEL_API_WORKERS
+        value: "1"
+      - key: SENTINEL_API_CORS_ORIGINS
+        value: '["*"]'
+      - key: SENTINEL_API_JWT_SECRET
+        generateValue: true
+      - key: SENTINEL_MONITOR_LOG_LEVEL
+        value: INFO

@@ -1,0 +1,46 @@
+# ==============================================
+# SentinelAI - Python Dependencies
+# ==============================================
+
+# Core LLM & AI
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-groq>=0.1.9
+langgraph>=0.2.0
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+
+# Validation & Configuration
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# Caching
+redis>=5.0.0
+aioredis>=2.0.1
+
+# Logging & Monitoring
+structlog>=24.1.0
+python-json-logger>=2.0.7
+
+# HTTP Client
+httpx>=0.26.0
+aiohttp>=3.9.0
+
+# Utilities
+tenacity>=8.2.0
+python-dateutil>=2.8.2
+pytz>=2024.1
+
+# Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
