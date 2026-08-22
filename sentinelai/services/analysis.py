@@ -6,7 +6,7 @@ High-level service for transaction analysis operations.
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 from sentinelai.agents.orchestrator import AMLOrchestrator
@@ -315,8 +315,6 @@ class AnalysisService:
         sar_deadline = None
         if state.get("sar_required"):
             sar_deadline = datetime.utcnow() + timedelta(days=30)
-        
-        from datetime import timedelta
         
         return AnalysisResponse(
             request_id=request_id,

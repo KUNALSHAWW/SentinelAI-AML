@@ -106,19 +106,24 @@ class BaseAgent(ABC, Generic[StateT]):
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        parse_structured: bool = False
+        parse_structured: bool = False,
+        enabled: bool = True
     ) -> str:
         """
         Invoke the LLM with the given prompt.
-        
+
         Args:
             prompt: The user prompt
             system_prompt: Optional system prompt
             parse_structured: Whether to parse structured output
-            
+            enabled: Whether LLM analysis is enabled
+
         Returns:
             The LLM response content
         """
+        if not enabled:
+            return ""
+
         start_time = datetime.utcnow()
         
         try:

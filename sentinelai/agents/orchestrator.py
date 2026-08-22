@@ -308,7 +308,11 @@ class AMLOrchestrator:
         
         # Create initial state
         initial_state = AMLState.create_initial(transaction, customer)
-        
+
+        # Apply configuration overrides to state
+        if config:
+            initial_state["enable_llm"] = config.get("enable_llm", True)
+
         # Run configuration
         run_config = {
             "configurable": {

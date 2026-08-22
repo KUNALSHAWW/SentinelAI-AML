@@ -32,7 +32,7 @@ if config.config_file_name is not None:
 
 # Set the SQLAlchemy URL from settings
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
+config.set_main_option("sqlalchemy.url", settings.database.postgres_url_sync)
 
 # Add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata

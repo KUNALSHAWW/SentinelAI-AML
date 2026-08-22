@@ -5,7 +5,7 @@ SentinelAI Specialized Agents
 Individual specialized agents for different aspects of AML analysis.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TypedDict
 from datetime import datetime
 import statistics
 
@@ -17,68 +17,116 @@ from sentinelai.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-class AMLState(Dict[str, Any]):
+class AMLState(TypedDict, total=False):
     """
     Enhanced AML State Definition
-    
-    This TypedDict-like class defines the complete state structure
-    that flows through the LangGraph workflow.
+
+    TypedDict defining the complete state structure that flows
+    through the LangGraph workflow.
     """
-    
-    @classmethod
+
+    # Input Data
+    transaction: Dict[str, Any]
+    customer: Dict[str, Any]
+    enable_llm: bool
+
+    # Risk Assessment
+    risk_score: int
+    risk_level: str
+    risk_factors: List[str]
+    alerts: List[str]
+
+    # Analysis Results
+    llm_analysis: Dict[str, Any]
+    investigation: Dict[str, Any]
+
+    # Screening Results
+    pep_status: Optional[bool]
+    pep_details: Optional[Dict[str, Any]]
+    sanction_hits: List[str]
+    sanction_details: List[Dict[str, Any]]
+
+    # Document Analysis
+    documents: List[str]
+    document_analysis: Dict[str, Any]
+
+    # Network Analysis
+    network_analysis: Dict[str, Any]
+    related_entities: List[str]
+
+    # Decision Tracking
+    decision_path: List[str]
+    routing_decisions: List[str]
+
+    # Case Management
+    case_id: Optional[str]
+    reporting_status: Optional[str]
+    sar_required: bool
+    sar_narrative: Optional[Dict[str, Any]]
+
+    # Metadata
+    processing_start: str
+    processing_steps: List[Dict[str, Any]]
+    errors: List[str]
+    transaction_count: int
+
+    # Added by routing nodes
+    review_deadline: Optional[str]
+
+    @staticmethod
     def create_initial(
-        cls,
         transaction: Dict[str, Any],
         customer: Dict[str, Any]
     ) -> "AMLState":
         """Create initial state from transaction and customer data"""
-        return cls({
+        return {
             # Input Data
             "transaction": transaction,
             "customer": customer,
-            
+            "enable_llm": True,
+
             # Risk Assessment
             "risk_score": 0,
             "risk_level": "LOW",
             "risk_factors": [],
             "alerts": [],
-            
+
             # Analysis Results
             "llm_analysis": {},
             "investigation": {},
-            
+
             # Screening Results
             "pep_status": None,
             "pep_details": None,
             "sanction_hits": [],
             "sanction_details": [],
-            
+
             # Document Analysis
             "documents": transaction.get("documents", []),
             "document_analysis": {},
-            
+
             # Network Analysis
             "network_analysis": {},
             "related_entities": [],
-            
+
             # Decision Tracking
             "decision_path": [],
             "routing_decisions": [],
-            
+
             # Case Management
             "case_id": None,
             "reporting_status": None,
             "sar_required": False,
             "sar_narrative": None,
-            
+
             # Metadata
             "processing_start": datetime.utcnow().isoformat(),
             "processing_steps": [],
             "errors": [],
-            
+
             # Transaction count for velocity
             "transaction_count": len(customer.get("transaction_history", [])),
-        })
+        }
 
 
 class GeographicRiskAgent(BaseAgent[AMLState]):
@@ -382,7 +430,7 @@ class CryptoRiskAgent(BaseAgent[AMLState]):
                     "CRYPTO_ANALYSIS",
                     crypto_details=str(crypto_details)
                 )
-                response = await self.invoke_llm(prompt)
+                response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
                 
                 # Extract additional codes from LLM
                 llm_codes = self.extract_risk_codes(response)
@@ -483,7 +531,7 @@ class SanctionsScreeningAgent(BaseAgent[AMLState]):
                     country=tx.get("origin_country", "Unknown"),
                     identifiers="N/A"
                 )
-                response = await self.invoke_llm(prompt)
+                response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
                 
                 # Parse LLM response for additional indicators
                 if "MATCH" in response.upper() and "NO_MATCH" not in response.upper():
@@ -568,7 +616,7 @@ class PEPScreeningAgent(BaseAgent[AMLState]):
                 organizations=customer.get("occupation", "Unknown"),
                 position="Unknown"
             )
-            response = await self.invoke_llm(prompt)
+            response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
             
             # Check LLM response for PEP indicators
             response_upper = response.upper()
@@ -651,7 +699,7 @@ class DocumentAnalysisAgent(BaseAgent[AMLState]):
                 destination_country=tx.get("destination_country", "Unknown")
             )
             
-            response = await self.invoke_llm(prompt)
+            response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
             
             # Extract risk codes from response
             doc_codes = self.extract_risk_codes(response)
@@ -727,7 +775,7 @@ class EnhancedDueDiligenceAgent(BaseAgent[AMLState]):
             prompt += f"\n\n**Current Risk Factors:** {', '.join(state['risk_factors'])}"
             prompt += f"\n\n**Current Alerts:** {', '.join(state['alerts'])}"
             
-            response = await self.invoke_llm(prompt)
+            response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
             
             # Extract comprehensive results
             edd_codes = self.extract_risk_codes(response)
@@ -907,7 +955,7 @@ Sanctions Hits: {', '.join(state.get('sanction_hits', []))}
                 activity_details=activity_details
             )
             
-            response = await self.invoke_llm(prompt)
+            response = await self.invoke_llm(prompt, enabled=state.get("enable_llm", True))
             
             sar_narrative = {
                 "narrative": response,
