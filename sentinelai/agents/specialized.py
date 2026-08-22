@@ -266,7 +266,16 @@ class BehavioralAnalysisAgent(BaseAgent[AMLState]):
             risk_factors.append("POTENTIAL_STRUCTURING")
             alerts.append(f"Transaction amount ${current_amount:,.2f} just below $10,000 threshold")
             behavioral_score += 20
-        
+
+        # Large transaction detection
+        if current_amount > settings.risk.very_large_transaction_threshold:
+            risk_factors.append("VERY_LARGE_TRANSACTION")
+            alerts.append(f"Very large transaction amount ${current_amount:,.2f}")
+            behavioral_score += 25
+        elif current_amount > settings.risk.large_transaction_threshold:
+            risk_factors.append("LARGE_TRANSACTION")
+            behavioral_score += 10
+
         # Analyze recent transaction history
         recent_txs = []
         for htx in history:
@@ -827,6 +836,7 @@ class RiskScoringAgent(BaseAgent[AMLState]):
         "TBML": 20,
         "DOC": 15,
         "NEW_ACCOUNT": 10,
+        "LARGE": 20,
     }
     
     def __init__(self):

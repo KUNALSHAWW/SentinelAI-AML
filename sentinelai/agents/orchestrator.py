@@ -176,10 +176,18 @@ class AMLOrchestrator:
             return "NO_HIT"
         
         def route_after_pep(state: AMLState) -> str:
-            """Route based on PEP screening results"""
+            """Route based on PEP screening results and account risk"""
             if state.get("pep_status"):
                 state["routing_decisions"].append("pep:PEP_FOUND")
-                return "PEP_FOUND"
+                return "EDD"
+            customer = state.get("customer", {})
+            tx = state.get("transaction", {})
+            if customer.get("account_age_days", 365) < settings.risk.new_account_days:
+                state["routing_decisions"].append("pep:NEW_ACCOUNT_EDD")
+                return "EDD"
+            if tx.get("amount", 0) > settings.risk.very_large_transaction_threshold:
+                state["routing_decisions"].append("pep:LARGE_TX_EDD")
+                return "EDD"
             state["routing_decisions"].append("pep:NO_PEP")
             return "NO_PEP"
         
@@ -225,8 +233,8 @@ class AMLOrchestrator:
             route_initial,
             {
                 "CRYPTO_PATH": "crypto_analysis",
-                "LARGE_TRANSACTION": "sanctions_check",
-                "NEW_ACCOUNT_ALERT": "enhanced_dd",
+                "LARGE_TRANSACTION": "geo_analysis",
+                "NEW_ACCOUNT_ALERT": "geo_analysis",
                 "STANDARD_FLOW": "geo_analysis",
             }
         )
@@ -261,7 +269,7 @@ class AMLOrchestrator:
             "pep_check",
             route_after_pep,
             {
-                "PEP_FOUND": "enhanced_dd",
+                "EDD": "enhanced_dd",
                 "NO_PEP": "risk_scoring",
             }
         )
