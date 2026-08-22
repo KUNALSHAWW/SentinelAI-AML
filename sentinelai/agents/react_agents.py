@@ -82,7 +82,10 @@ def build_react_agents() -> Dict[str, Any]:
 
 async def run_agent(agent: Any, query: str) -> str:
     """Run a ReAct agent and return its final text answer."""
-    result = await agent.ainvoke({"messages": [HumanMessage(content=query)]})
+    result = await agent.ainvoke(
+        {"messages": [HumanMessage(content=query)]},
+        config={"recursion_limit": 50},
+    )
     messages = result.get("messages", [])
     if not messages:
         return ""
