@@ -27,8 +27,10 @@ services:
         value: groq
       - key: GROQ_API_KEY
         sync: false
+      - key: TAVILY_API_KEY
+        sync: false
       - key: SENTINEL_LLM_GROQ_MODEL
-        value: llama-3.3-70b-versatile
+        value: qwen/qwen3.6-27b
       - key: SENTINEL_LLM_TEMPERATURE
         value: "0.0"
       - key: SENTINEL_LLM_MAX_TOKENS

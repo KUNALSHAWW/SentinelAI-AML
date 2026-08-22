@@ -8,7 +8,7 @@ environment-aware configuration management.
 
 from typing import List, Optional, Literal
 from pydantic_settings import BaseSettings
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, AliasChoices
 from functools import lru_cache
 import os
 
@@ -22,15 +22,19 @@ class LLMSettings(BaseSettings):
     )
     groq_api_key: Optional[SecretStr] = Field(
         default=None,
-        env="GROQ_API_KEY"
+        validation_alias=AliasChoices("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY")
     )
     groq_model: str = Field(
-        default="llama-3.3-70b-versatile",
+        default="qwen/qwen3.6-27b",
         description="Groq model to use"
+    )
+    tavily_api_key: Optional[SecretStr] = Field(
+        default=None,
+        validation_alias=AliasChoices("TAVILY_API_KEY", "SENTINEL_LLM_TAVILY_API_KEY")
     )
     huggingface_api_key: Optional[SecretStr] = Field(
         default=None,
-        env="HUGGINGFACE_API_KEY"
+        validation_alias=AliasChoices("HUGGINGFACE_API_KEY", "SENTINEL_LLM_HUGGINGFACE_API_KEY")
     )
     huggingface_model: str = Field(
         default="meta-llama/Llama-3.1-70B-Instruct",

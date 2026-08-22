@@ -896,10 +896,10 @@ class RiskScoringAgent(BaseAgent[AMLState]):
             risk_level = "LOW"
         
         # Determine SAR requirement
-        sar_required = (
-            final_score >= settings.risk.high_risk_threshold or
-            bool(state.get("sanction_hits")) or
-            (state.get("pep_status") and final_score >= settings.risk.medium_risk_threshold)
+        sar_required = bool(
+            final_score >= settings.risk.high_risk_threshold
+            or bool(state.get("sanction_hits"))
+            or bool(state.get("pep_status") and final_score >= settings.risk.medium_risk_threshold)
         )
         
         state = self.update_decision_path(state, "complete")
