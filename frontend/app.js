@@ -13,8 +13,8 @@ const CONFIG = {
         : '',  // Empty string = same origin
     ENDPOINTS: {
         health: '/health',
-        analyze: '/api/v1/analyze/rules',  // Use rule-based endpoint (always available)
-        analyzeLLM: '/api/v1/analyze',     // LLM-powered endpoint (may timeout)
+        analyze: '/api/v1/analyze',         // LLM-powered analysis (real backend)
+        analyzeRules: '/api/v1/analyze/rules',  // Rule-based fallback (no LLM)
         cases: '/api/v1/cases'
     },
     ANIMATION: {
@@ -368,7 +368,7 @@ async function analyzeTransaction() {
 
 async function callAPI(requestData) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
     
     try {
         const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.analyze}`, {
