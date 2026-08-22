@@ -331,7 +331,7 @@ async function analyzeTransaction() {
         if (state.useLocalSimulation) {
             result = await simulateAnalysis(requestData);
         } else {
-            result = await callAPI(requestData);
+            result = await callAPIStream(requestData, showProgress);
         }
         
         console.log('📥 Analysis Result:', result);
@@ -402,6 +402,89 @@ async function callAPI(requestData) {
         }
         throw error;
     }
+}
+
+// ============================================
+// Streaming API (Server-Sent Events)
+// ============================================
+async function callAPIStream(requestData, onProgress) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/api/v1/analyze/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'X-API-Key': 'demo-key'
+            },
+            body: JSON.stringify(requestData),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let result = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\n\n');
+            buffer = events.pop();
+            for (const event of events) {
+                if (!event.startsWith('data: ')) continue;
+                const data = JSON.parse(event.slice(6));
+                if (data.type === 'progress') {
+                    onProgress(data.step);
+                } else if (data.type === 'result') {
+                    result = data.result;
+                } else if (data.type === 'error') {
+                    throw new Error(data.message);
+                }
+            }
+        }
+
+        clearTimeout(timeoutId);
+        return result;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timeout - analysis is taking too long');
+        }
+        throw error;
+    }
+}
+
+function showProgress(step) {
+    if (!elements.resultsPanel) return;
+    elements.resultsPanel.innerHTML = `
+        <div class="analysis-result" style="animation: fadeIn 0.5s ease;">
+            <div class="risk-header" style="background: rgba(99, 102, 241, 0.1);">
+                <div class="risk-score-circle medium" style="border-color: #6366f1;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #6366f1;"></i>
+                </div>
+                <div class="risk-info">
+                    <h3>Analyzing Transaction...</h3>
+                    <span class="risk-level-badge medium">In Progress</span>
+                </div>
+            </div>
+            <div class="result-section">
+                <h4><i class="fas fa-tasks"></i> Current Step</h4>
+                <div class="alert-item" style="border-left-color: #6366f1;">
+                    <i class="fas fa-sync-alt fa-spin" style="color: #6366f1;"></i>
+                    <span>${step}</span>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 // ============================================

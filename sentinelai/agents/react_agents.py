@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 
-from sentinelai.agents.base import LLMFactory
+from sentinelai.agents.base import LLMFactory, strip_thinking
 from sentinelai.agents.tools import get_search_tools
 from sentinelai.core.logging import get_logger
 
@@ -89,4 +89,4 @@ async def run_agent(agent: Any, query: str) -> str:
     messages = result.get("messages", [])
     if not messages:
         return ""
-    return str(messages[-1].content)
+    return strip_thinking(str(messages[-1].content))

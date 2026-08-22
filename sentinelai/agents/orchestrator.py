@@ -115,7 +115,11 @@ class AMLOrchestrator:
     # Parallel agent execution
     # =====================
 
-    async def _run_react_agents(self, state: AMLState) -> AMLState:
+    async def _run_react_agents(
+        self,
+        state: AMLState,
+        progress_callback: Optional[Any] = None
+    ) -> AMLState:
         """Run the applicable ReAct agents in parallel and merge their findings."""
         if not state.get("enable_llm", True):
             return state
@@ -151,6 +155,8 @@ class AMLOrchestrator:
                 "score": _extract_score(text),
             }
             state["decision_path"].append(f"{name}_agent:complete")
+            if progress_callback:
+                await progress_callback(f"{name} agent complete")
 
         return state
 
@@ -162,7 +168,8 @@ class AMLOrchestrator:
         self,
         transaction: Dict[str, Any],
         customer: Dict[str, Any],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Any] = None
     ) -> AMLState:
         """Run the full agentic AML analysis on a transaction."""
         start_time = datetime.utcnow()
@@ -170,6 +177,10 @@ class AMLOrchestrator:
         state = AMLState.create_initial(transaction, customer)
         if config:
             state["enable_llm"] = config.get("enable_llm", True)
+
+        async def emit(step: str) -> None:
+            if progress_callback:
+                await progress_callback(step)
 
         self.logger.info(
             "Starting agentic AML analysis",
@@ -183,19 +194,24 @@ class AMLOrchestrator:
         try:
             # 1. Parallel ReAct agents (research + web search)
             state["decision_path"].append("entry:initial_screening")
-            state = await self._run_react_agents(state)
+            await emit("Running research agents (web search + reasoning)")
+            state = await self._run_react_agents(state, progress_callback)
 
             # 2. Deterministic behavioral analysis (velocity/structuring)
+            await emit("Behavioral analysis")
             state = await self.behavioral.process(state)
 
             # 3. Chain-of-Thought synthesis
+            await emit("Chain-of-Thought synthesis")
             state = await self.edd.process(state)
 
             # 4. Deterministic risk scoring
+            await emit("Risk scoring")
             state = await self.scoring.process(state)
 
             # 5. SAR generation if required
             if state.get("sar_required"):
+                await emit("Generating SAR narrative")
                 state = await self.sar.process(state)
 
             state["processing_time_ms"] = int(

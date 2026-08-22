@@ -7,9 +7,12 @@ API endpoints for transaction analysis, case management, and system operations.
 
 from typing import List, Optional
 from datetime import datetime
+import asyncio
+import json
 import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 
 from sentinelai.core.config import settings
@@ -173,6 +176,50 @@ async def analyze_transaction(
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
         )
+
+
+@router.post(
+    "/api/v1/analyze/stream",
+    tags=["Analysis"],
+    summary="Stream Transaction Analysis",
+    description="Stream the analysis progress and final result via Server-Sent Events."
+)
+async def analyze_transaction_stream(
+    request: AnalysisRequest,
+    api_key: str = Depends(verify_api_key)
+):
+    """Stream the analysis progress and result via SSE."""
+    async def event_generator():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def progress(step: str):
+            await queue.put(("progress", step))
+
+        async def run():
+            try:
+                result = await get_analysis_service().analyze_transaction(
+                    request, progress_callback=progress
+                )
+                await queue.put(("result", result))
+            except Exception as e:
+                await queue.put(("error", str(e)))
+
+        task = asyncio.create_task(run())
+
+        while True:
+            kind, payload = await queue.get()
+            if kind == "progress":
+                yield f"data: {json.dumps({'type': 'progress', 'step': payload})}\n\n"
+            elif kind == "result":
+                yield f"data: {json.dumps({'type': 'result', 'result': payload.model_dump(mode='json')})}\n\n"
+                break
+            elif kind == "error":
+                yield f"data: {json.dumps({'type': 'error', 'message': payload})}\n\n"
+                break
+
+        await task
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post(

@@ -42,14 +42,16 @@ class AnalysisService:
     
     async def analyze_transaction(
         self,
-        request: AnalysisRequest
+        request: AnalysisRequest,
+        progress_callback=None
     ) -> AnalysisResponse:
         """
         Analyze a single transaction.
-        
+
         Args:
             request: Analysis request containing transaction and customer data
-            
+            progress_callback: Optional async callback invoked with progress steps
+
         Returns:
             Formatted analysis response
         """
@@ -90,7 +92,8 @@ class AnalysisService:
                     "enable_llm": request.enable_llm_analysis,
                     "enable_network": request.enable_network_analysis,
                     "priority": request.priority.value,
-                }
+                },
+                progress_callback=progress_callback,
             )
             
             # Calculate processing time

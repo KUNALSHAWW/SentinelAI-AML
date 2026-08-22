@@ -24,6 +24,20 @@ logger = get_logger(__name__)
 StateT = TypeVar("StateT", bound=Dict[str, Any])
 
 
+def strip_thinking(text: str) -> str:
+    """Strip the Qwen3 'thinking' block, returning only the final answer.
+
+    The qwen3.6-27b model emits its reasoning in a ``thinking`` block and the
+    actual answer after a ``response`` marker. We keep only the answer.
+    """
+    if not text:
+        return text
+    match = re.search(r"\n\s*response\s*\n", text)
+    if match:
+        return text[match.end():].strip()
+    return text
+
+
 class LLMFactory:
     """Factory for creating LLM instances based on configuration"""
     
@@ -174,7 +188,7 @@ class BaseAgent(ABC, Generic[StateT]):
                 }
             )
             
-            return response.content
+            return strip_thinking(response.content)
             
         except Exception as e:
             self._error_count += 1
