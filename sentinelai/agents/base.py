@@ -52,15 +52,30 @@ class LLMFactory:
             logger.info(f"Initialized Groq LLM with model: {settings.llm.groq_model}")
             
         elif provider == "huggingface":
-            from langchain_huggingface import HuggingFaceEndpoint
-            
-            cls._instance = HuggingFaceEndpoint(
-                repo_id=settings.llm.huggingface_model,
-                temperature=settings.llm.temperature,
-                max_new_tokens=settings.llm.max_tokens,
-                huggingfacehub_api_token=settings.llm.huggingface_api_key.get_secret_value() if settings.llm.huggingface_api_key else None,
-            )
-            logger.info(f"Initialized HuggingFace LLM with model: {settings.llm.huggingface_model}")
+            try:
+                from langchain_huggingface import HuggingFaceEndpoint
+            except ImportError:
+                logger.warning(
+                    "langchain_huggingface is not installed; falling back to Groq. "
+                    "Set SENTINEL_LLM_PROVIDER=groq to use Groq directly."
+                )
+                from langchain_groq import ChatGroq
+                cls._instance = ChatGroq(
+                    model=settings.llm.groq_model,
+                    temperature=settings.llm.temperature,
+                    max_tokens=settings.llm.max_tokens,
+                    timeout=settings.llm.timeout,
+                    max_retries=settings.llm.max_retries,
+                    api_key=settings.llm.groq_api_key.get_secret_value() if settings.llm.groq_api_key else None,
+                )
+            else:
+                cls._instance = HuggingFaceEndpoint(
+                    repo_id=settings.llm.huggingface_model,
+                    temperature=settings.llm.temperature,
+                    max_new_tokens=settings.llm.max_tokens,
+                    huggingfacehub_api_token=settings.llm.huggingface_api_key.get_secret_value() if settings.llm.huggingface_api_key else None,
+                )
+                logger.info(f"Initialized HuggingFace LLM with model: {settings.llm.huggingface_model}")
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
         
@@ -86,14 +101,21 @@ class BaseAgent(ABC, Generic[StateT]):
     ):
         self.name = name
         self.description = description
-        self.llm = llm or LLMFactory.get_llm()
+        self._llm = llm  # may be None; constructed lazily on first use
         self.logger = get_logger(f"agent.{name}")
-        
+
         # Metrics
         self._invocation_count = 0
         self._total_latency_ms = 0
         self._error_count = 0
-    
+
+    @property
+    def llm(self) -> BaseChatModel:
+        """Lazily construct the LLM on first use."""
+        if self._llm is None:
+            self._llm = LLMFactory.get_llm()
+        return self._llm
+
     @abstractmethod
     async def process(self, state: StateT) -> StateT:
         """

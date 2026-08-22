@@ -249,7 +249,7 @@ Default rate limit: 100 requests per minute per API key.
                 error_code=f"HTTP_{exc.status_code}",
                 message=exc.detail,
                 request_id=request.headers.get("X-Request-ID")
-            ).model_dump()
+            ).model_dump(mode="json")
         )
     
     @app.exception_handler(Exception)
@@ -271,7 +271,7 @@ Default rate limit: 100 requests per minute per API key.
                 error_code="INTERNAL_ERROR",
                 message=detail,
                 request_id=request.headers.get("X-Request-ID")
-            ).model_dump()
+            ).model_dump(mode="json")
         )
     
     return app
