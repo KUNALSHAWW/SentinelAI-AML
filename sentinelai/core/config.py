@@ -105,6 +105,33 @@ class DatabaseSettings(BaseSettings):
     redis_password: Optional[SecretStr] = None
     redis_db: int = 0
 
+    ssl_mode: Literal["prefer", "require", "disable", "verify-full"] = Field(
+        default="prefer",
+        description="PostgreSQL TLS. 'prefer' tries SSL and falls back to plain (works on Render, which requires TLS, "
+                    "and on local/compose databases). A sslmode= in DATABASE_URL overrides this.")
+
+    @staticmethod
+    def _split_sslmode(url: str):
+        """asyncpg rejects libpq's ?sslmode=; strip it and return (clean_url, mode_or_None)."""
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+        parts = urlsplit(url)
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        mode = next((v for k, v in query if k in ("sslmode", "ssl")), None)
+        rest = [(k, v) for k, v in query if k not in ("sslmode", "ssl")]
+        return urlunsplit(parts._replace(query=urlencode(rest))), mode
+
+    @property
+    def connect_args(self) -> dict:
+        """Driver arguments for the async engine (TLS for PostgreSQL)."""
+        if not self.url.startswith("postgresql"):
+            return {}
+        mode = self.ssl_mode
+        if self.database_url_override:
+            _, from_url = self._split_sslmode(self.database_url_override)
+            mode = from_url or mode
+        mode = {"allow": "prefer", "verify-ca": "verify-full", "true": "require"}.get(mode, mode)
+        return {"ssl": mode}
+
     @staticmethod
     def _async_url(url: str) -> str:
         if url.startswith("postgres://"):
@@ -119,7 +146,8 @@ class DatabaseSettings(BaseSettings):
     def url(self) -> str:
         """Async SQLAlchemy URL."""
         if self.database_url_override:
-            return self._async_url(self.database_url_override)
+            url = self._async_url(self.database_url_override)
+            return self._split_sslmode(url)[0] if url.startswith("postgresql") else url
         if self.postgres_host:
             pw = self.postgres_password.get_secret_value()
             return (

@@ -58,3 +58,18 @@ def test_fx_override_and_thresholds(monkeypatch):
 def test_web_search_and_pii_defaults_are_privacy_preserving():
     llm = LLMSettings()
     assert llm.web_search_enabled is False and llm.redact_pii is True and llm.max_uplift <= 20
+
+
+def test_postgres_tls_defaults_and_sslmode_translation(monkeypatch):
+    """Regression: Render PostgreSQL requires TLS; asyncpg needs ssl=..., and rejects libpq's ?sslmode=."""
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@dpg-abc-a/db")
+    d = DatabaseSettings()
+    assert d.connect_args == {"ssl": "prefer"} and d.url == "postgresql+asyncpg://u:p@dpg-abc-a/db"
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h.render.com/db?sslmode=require")
+    d = DatabaseSettings()
+    assert d.connect_args == {"ssl": "require"} and "sslmode" not in d.url
+    monkeypatch.setenv("SENTINEL_DB_SSL_MODE", "disable")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h/db")
+    assert DatabaseSettings().connect_args == {"ssl": "disable"}
+    monkeypatch.delenv("DATABASE_URL")
+    assert DatabaseSettings().connect_args == {}              # SQLite needs none

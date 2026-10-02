@@ -31,7 +31,7 @@ def configure_engine(url: Optional[str] = None) -> AsyncEngine:
             path = url.split("///", 1)[-1]
             Path(path).parent.mkdir(parents=True, exist_ok=True)
     else:
-        kwargs.update(pool_pre_ping=True)
+        kwargs.update(pool_pre_ping=True, connect_args=settings.database.connect_args)
     _engine = create_async_engine(url, **kwargs)
     if url.startswith("sqlite"):
         from sqlalchemy import event
