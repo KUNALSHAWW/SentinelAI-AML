@@ -1,233 +1,212 @@
 """
-SentinelAI CLI Entry Point
-==========================
+SentinelAI command line
+=======================
 
-Command-line interface for running the SentinelAI platform.
+    sentinelai serve [--host H --port P --reload]
+    sentinelai analyze [FILE] [--no-llm] [--regime IN_PMLA] [-o out.json]
+    sentinelai screen "Name" [--country RU]          # sanctions / PEP screening
+    sentinelai sanctions update | info                # load / inspect the OFAC list
+    sentinelai evaluate [--n 1500 --seed 7 --markdown FILE]
+    sentinelai audit verify
+    sentinelai scenarios
 """
+
+from __future__ import annotations
 
 import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from sentinelai.core.config import settings
-from sentinelai.core.logging import get_logger, setup_logging
-
-logger = get_logger(__name__)
+from sentinelai.core.logging import setup_logging
 
 
-def print_banner():
-    """Print SentinelAI ASCII banner"""
-    banner = """
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║   ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗                ║
-║   ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║                ║
-║   ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║                ║
-║   ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║                ║
-║   ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗           ║
-║   ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝           ║
-║                              █████╗ ██╗                                       ║
-║                             ██╔══██╗██║                                       ║
-║                             ███████║██║                                       ║
-║                             ██╔══██║██║                                       ║
-║                             ██║  ██║██║                                       ║
-║                             ╚═╝  ╚═╝╚═╝                                       ║
-║                                                                               ║
-║   🛡️  Financial Crime Intelligence Platform v1.0.0                            ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-    """
-    print(banner)
+def _print_result(label: str, d: Dict[str, Any]) -> None:
+    ra = d["risk_assessment"]
+    print(f"\n{'=' * 72}\n{label}\n{'=' * 72}")
+    print(f"Risk {ra['risk_score']}/100 ({ra['risk_level']})  ->  {d['recommended_action']}   "
+          f"[mode={d['mode']}, llm={d['llm_status']}]")
+    if d.get("explanation"):
+        print("Why (points):")
+        for c in d["explanation"]["contributions"][:6]:
+            print(f"  +{c['points']:>2}  {c['description']}")
+        for cf in d["explanation"]["counterfactuals"][:1]:
+            print(f"  Counterfactual: without '{cf['without']}' -> {cf['score_without']} ({cf['level_without']})")
+    if d.get("typologies"):
+        print("Typologies: " + ", ".join(t["name"] for t in d["typologies"]))
+    for w in d.get("warnings", []):
+        print(f"  ! {w}")
+    if d.get("sar_required"):
+        r = d.get("report") or {}
+        print(f"{r.get('report_type', 'SAR')} required - deadline {d.get('sar_deadline')}")
 
 
-def run_server():
-    """Run the FastAPI server"""
+def cmd_serve(args) -> None:
     import uvicorn
-    
-    print_banner()
-    print(f"\n🚀 Starting SentinelAI API Server...")
-    print(f"   Environment: {settings.environment}")
-    print(f"   Host: {settings.api.host}")
-    print(f"   Port: {settings.api.port}")
-    print(f"   LLM Provider: {settings.llm.provider}")
-    print(f"\n📚 API Documentation: http://{settings.api.host}:{settings.api.port}/docs")
-    print()
-    
-    uvicorn.run(
-        "sentinelai.api.app:app",
-        host=settings.api.host,
-        port=settings.api.port,
-        reload=settings.api.reload,
-        workers=settings.api.workers if not settings.api.reload else 1,
-        log_level=settings.monitoring.log_level.lower(),
-    )
+    if args.host:
+        settings.api.host = args.host
+    if args.port:
+        settings.api.port = args.port
+    reload = args.reload or settings.api.reload
+    print(f"SentinelAI {settings.app_version} on http://{settings.api.host}:{settings.api.port}  "
+          f"(env={settings.environment}, regime={settings.risk.regime}, llm_configured={settings.llm.api_key_configured})")
+    uvicorn.run("sentinelai.api.app:app", host=settings.api.host, port=settings.api.port, reload=reload,
+                workers=1 if reload else settings.api.workers, log_level=settings.monitoring.log_level.lower())
 
 
-def run_analysis(file_path: str, output_path: str = None):
-    """Run analysis on a JSON file of cases"""
-    from sentinelai.agents.orchestrator import AMLOrchestrator
-    
-    print_banner()
-    print(f"\n🔍 Running AML Analysis...")
-    print(f"   Input: {file_path}")
-    
-    # Load cases
-    with open(file_path, "r") as f:
-        cases = json.load(f)
-    
-    print(f"   Cases to analyze: {len(cases)}")
-    print()
-    
-    # Initialize orchestrator
-    orchestrator = AMLOrchestrator()
-    
-    results = []
-    
-    async def analyze_all():
-        for i, case in enumerate(cases, 1):
-            print(f"\n{'='*60}")
-            print(f"Case {i}/{len(cases)}: {case.get('scenario', 'Unknown')}")
-            print('='*60)
-            
-            # Parse timestamps
-            tx = case["transaction"]
-            if "timestamp" in tx and isinstance(tx["timestamp"], str):
-                tx["timestamp"] = datetime.fromisoformat(tx["timestamp"])
-            
-            customer = case["customer"]
-            for htx in customer.get("transaction_history", []):
-                if isinstance(htx.get("timestamp"), str):
-                    htx["timestamp"] = datetime.fromisoformat(htx["timestamp"])
-            
-            # Run analysis
-            result = await orchestrator.analyze(tx, customer)
-            
-            # Print results
-            print(f"\n📊 Risk Score: {result['risk_score']}/100")
-            print(f"🎯 Risk Level: {result['risk_level']}")
-            print(f"📋 Decision Path: {' → '.join(result['decision_path'])}")
-            
-            if result.get("alerts"):
-                print(f"\n🚨 Alerts ({len(result['alerts'])}):")
-                for alert in result["alerts"][:5]:
-                    print(f"   • {alert}")
-            
-            if result.get("risk_factors"):
-                print(f"\n⚠️ Risk Factors ({len(result['risk_factors'])}):")
-                for factor in result["risk_factors"][:5]:
-                    print(f"   • {factor}")
-            
-            if result.get("sar_required"):
-                print(f"\n📄 SAR Required: Yes")
-                if result.get("case_id"):
-                    print(f"   Case ID: {result['case_id']}")
-            
-            results.append({
-                "scenario": case.get("scenario"),
-                "risk_score": result["risk_score"],
-                "risk_level": result["risk_level"],
-                "sar_required": result.get("sar_required", False),
-                "alerts": result.get("alerts", []),
-                "decision_path": result.get("decision_path", [])
-            })
-    
-    asyncio.run(analyze_all())
-    
-    # Save results
-    if output_path:
-        with open(output_path, "w") as f:
-            json.dump(results, f, indent=2, default=str)
-        print(f"\n✅ Results saved to: {output_path}")
-    
-    print(f"\n{'='*60}")
-    print("Analysis Complete!")
-    print(f"{'='*60}")
-    
-    # Summary
-    high_risk = sum(1 for r in results if r["risk_level"] in ["HIGH", "CRITICAL"])
-    sars = sum(1 for r in results if r["sar_required"])
-    avg_score = sum(r["risk_score"] for r in results) / len(results) if results else 0
-    
-    print(f"\n📈 Summary:")
-    print(f"   Total Cases: {len(results)}")
-    print(f"   High/Critical Risk: {high_risk}")
-    print(f"   SAR Required: {sars}")
-    print(f"   Average Risk Score: {avg_score:.1f}")
+def cmd_analyze(args) -> None:
+    from sentinelai.db.session import configure_engine, dispose_engine, init_db
+    from sentinelai.models.schemas import AnalysisRequest
+    from sentinelai.services.analysis import AnalysisService
+    from sentinelai.services.scenarios import load_scenarios, scenario_request
 
-
-def main():
-    """Main CLI entry point"""
-    parser = argparse.ArgumentParser(
-        description="SentinelAI - Financial Crime Intelligence Platform",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  sentinelai serve                    Start the API server
-  sentinelai analyze cases.json       Analyze cases from JSON file
-  sentinelai analyze cases.json -o results.json
-        """
-    )
-    
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
-    
-    # Serve command
-    serve_parser = subparsers.add_parser("serve", help="Start the API server")
-    serve_parser.add_argument(
-        "--host", default=None,
-        help=f"Host to bind (default: {settings.api.host})"
-    )
-    serve_parser.add_argument(
-        "--port", type=int, default=None,
-        help=f"Port to bind (default: {settings.api.port})"
-    )
-    serve_parser.add_argument(
-        "--reload", action="store_true",
-        help="Enable auto-reload for development"
-    )
-    
-    # Analyze command
-    analyze_parser = subparsers.add_parser("analyze", help="Analyze transactions")
-    analyze_parser.add_argument(
-        "input", help="Input JSON file with cases"
-    )
-    analyze_parser.add_argument(
-        "-o", "--output", help="Output JSON file for results"
-    )
-    
-    # Version
-    parser.add_argument(
-        "--version", action="version",
-        version=f"SentinelAI v{settings.app_version}"
-    )
-    
-    args = parser.parse_args()
-    
-    # Setup logging
-    setup_logging(
-        log_level=settings.monitoring.log_level,
-        log_format="text"  # Use colored text for CLI
-    )
-    
-    if args.command == "serve":
-        if args.host:
-            settings.api.host = args.host
-        if args.port:
-            settings.api.port = args.port
-        if args.reload:
-            settings.api.reload = True
-        run_server()
-    
-    elif args.command == "analyze":
-        if not Path(args.input).exists():
-            print(f"Error: File not found: {args.input}")
-            sys.exit(1)
-        run_analysis(args.input, args.output)
-    
+    if args.file:
+        raw = json.loads(Path(args.file).read_text())
+        scenarios = raw["scenarios"] if isinstance(raw, dict) and "scenarios" in raw else raw
+        items = [(s.get("scenario") or s.get("id") or f"case-{i}", scenario_request(s) if "request" not in s else s["request"])
+                 for i, s in enumerate(scenarios, 1)]
     else:
+        items = [(f"{s['scenario']}", scenario_request(s)) for s in load_scenarios()]
+
+    async def run():
+        configure_engine("sqlite+aiosqlite:///:memory:" if not args.persist else None)
+        await init_db()
+        service = AnalysisService()
+        out = []
+        for label, payload in items:
+            payload = {**payload, "enable_llm_analysis": not args.no_llm, "persist": True}
+            if args.regime:
+                payload["regime"] = args.regime
+            resp = await service.analyze_transaction(AnalysisRequest.model_validate(payload))
+            d = json.loads(resp.model_dump_json())
+            _print_result(label, d)
+            out.append({"scenario": label, **{k: d[k] for k in ("risk_assessment", "recommended_action", "sar_required", "mode", "typologies", "explanation")}})
+        await dispose_engine()
+        return out
+
+    results = asyncio.run(run())
+    if args.output:
+        Path(args.output).write_text(json.dumps(results, indent=2, default=str))
+        print(f"\nResults written to {args.output}")
+    high = sum(1 for r in results if r["risk_assessment"]["risk_level"] in ("HIGH", "CRITICAL"))
+    print(f"\n{len(results)} cases, {high} high/critical, avg score "
+          f"{sum(r['risk_assessment']['risk_score'] for r in results) / max(1, len(results)):.1f}")
+
+
+def cmd_screen(args) -> None:
+    from sentinelai.engine.pep import get_pep_screener
+    from sentinelai.engine.sanctions import get_screener
+    s = get_screener()
+    print(f"List: {s.info['name']} ({s.info['entries']} entries, as of {s.info['as_of']}{', SYNTHETIC' if s.info['synthetic'] else ''})")
+    matches = s.screen(args.name, [args.country] if args.country else [])
+    if not matches:
+        print("Sanctions: no hits")
+    for m in matches:
+        print(f"Sanctions: {m.level:24} {m.score:.3f}  '{args.name}' ~ '{m.listed_name}' [{', '.join(m.programs)}]"
+              f"{'  corroborated by ' + ','.join(m.corroborated_by) if m.corroborated_by else ''}")
+    pep = get_pep_screener().screen(args.name, args.occupation or "")
+    for m in pep.list_matches:
+        print(f"PEP list:  {m['score']:.3f}  '{m['listed_name']}' ({m['position']}, {m['country']})")
+    for r in pep.role_indicators:
+        print(f"PEP role indicator: {r['role']} ('{r['matched_text']}')")
+    if not pep.is_pep_candidate:
+        print("PEP: no indication")
+
+
+def cmd_sanctions(args) -> None:
+    from sentinelai.engine.sanctions import download_ofac, get_screener
+    if args.action == "update":
+        sizes = download_ofac()
+        print("Downloaded: " + ", ".join(f"{k} ({v:,} bytes)" for k, v in sizes.items()))
+        info = get_screener(reload=True).info
+        print(f"Loaded {info['entries']:,} entries / {info['names_indexed']:,} names from {info['source']}")
+    else:
+        print(json.dumps(get_screener().info, indent=2))
+
+
+def cmd_evaluate(args) -> None:
+    from sentinelai.evaluation.report import render_markdown
+    from sentinelai.evaluation.runner import run_benchmark, run_sanctions_matcher_eval
+    bench = run_benchmark(args.n, args.seed, args.regime)
+    matcher = run_sanctions_matcher_eval(seed=args.seed)
+    md = render_markdown(bench, matcher)
+    if args.markdown:
+        Path(args.markdown).write_text(md)
+        print(f"Report written to {args.markdown}")
+    e = bench["engine"]
+    print(f"n={args.n} seed={args.seed}: ROC-AUC {e['roc_auc']:.3f}, AP {e['average_precision']:.3f}, "
+          f"@{e['threshold']}: P {e['precision']:.2f} R {e['recall']:.2f} FPR {e['fpr']:.3f}")
+    if not args.markdown:
+        print(md)
+
+
+def cmd_audit(args) -> None:
+    from sentinelai.db.session import init_db, session_scope
+    from sentinelai.services.audit import audit
+
+    async def run():
+        await init_db()
+        async with session_scope() as s:
+            return await audit.verify(s)
+    result = asyncio.run(run())
+    print(json.dumps(result, indent=2))
+    sys.exit(0 if result["valid"] else 2)
+
+
+def cmd_scenarios(_args) -> None:
+    from sentinelai.services.scenarios import load_scenarios
+    for s in load_scenarios():
+        print(f"{s['id']:20} {s['scenario']}")
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser(prog="sentinelai", description="SentinelAI - explainable AML intelligence")
+    parser.add_argument("--version", action="version", version=f"SentinelAI {settings.app_version}")
+    sub = parser.add_subparsers(dest="command")
+
+    p = sub.add_parser("serve", help="Run the API server")
+    p.add_argument("--host"), p.add_argument("--port", type=int)
+    p.add_argument("--reload", action="store_true")
+    p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("analyze", help="Analyse scenarios (default: bundled demo scenarios)")
+    p.add_argument("file", nargs="?", help="JSON file of scenarios/requests")
+    p.add_argument("--no-llm", action="store_true", help="Deterministic engine only")
+    p.add_argument("--regime", choices=["US_BSA", "IN_PMLA", "EU_AMLD"])
+    p.add_argument("--persist", action="store_true", help="Write to the configured database (default: in-memory)")
+    p.add_argument("-o", "--output")
+    p.set_defaults(fn=cmd_analyze)
+
+    p = sub.add_parser("screen", help="Screen a name against sanctions and PEP lists")
+    p.add_argument("name"), p.add_argument("--country"), p.add_argument("--occupation")
+    p.set_defaults(fn=cmd_screen)
+
+    p = sub.add_parser("sanctions", help="Manage the sanctions list")
+    p.add_argument("action", choices=["update", "info"])
+    p.set_defaults(fn=cmd_sanctions)
+
+    p = sub.add_parser("evaluate", help="Run the synthetic benchmark")
+    p.add_argument("--n", type=int, default=1500), p.add_argument("--seed", type=int, default=7)
+    p.add_argument("--regime", default="US_BSA", choices=["US_BSA", "IN_PMLA", "EU_AMLD"])
+    p.add_argument("--markdown", help="Write the report to this file")
+    p.set_defaults(fn=cmd_evaluate)
+
+    p = sub.add_parser("audit", help="Audit trail tools")
+    p.add_argument("action", choices=["verify"])
+    p.set_defaults(fn=cmd_audit)
+
+    p = sub.add_parser("scenarios", help="List bundled demo scenarios")
+    p.set_defaults(fn=cmd_scenarios)
+
+    args = parser.parse_args(argv)
+    if not getattr(args, "fn", None):
         parser.print_help()
+        return
+    setup_logging(settings.monitoring.log_level if args.command == "serve" else "WARNING", "text")
+    args.fn(args)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,211 @@
+{
+ "title": "SentinelAI - AML operations",
+ "uid": "sentinelai-ops",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "15s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "timeseries",
+   "title": "Analyses per minute by risk level",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "sum by (risk_level) (rate(sentinelai_analyses_total[5m]))*60",
+     "legendFormat": "{{risk_level}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "Analysis latency p95 (s)",
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum by (le, mode) (rate(sentinelai_analysis_seconds_bucket[5m])))",
+     "legendFormat": "{{mode}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "Sanctions hits by level",
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "sum by (level) (increase(sentinelai_sanctions_hits_total[1h]))",
+     "legendFormat": "{{level}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "Top detection signals (1h)",
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "topk(10, sum by (code) (increase(sentinelai_signals_total[1h])))",
+     "legendFormat": "{{code}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Reports (SAR/STR) required",
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "increase(sentinelai_reports_required_total[1h])",
+     "legendFormat": "reports/h",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Cases created",
+   "gridPos": {
+    "x": 8,
+    "y": 16,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "increase(sentinelai_cases_created_total[1h])",
+     "legendFormat": "cases/h",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "LLM agent outcomes",
+   "gridPos": {
+    "x": 16,
+    "y": 16,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "sum by (agent, outcome) (increase(sentinelai_llm_agent_runs_total[1h]))",
+     "legendFormat": "{{agent}} {{outcome}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "HTTP requests by status",
+   "gridPos": {
+    "x": 0,
+    "y": 24,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "sum by (status) (rate(sentinelai_http_requests_total[5m]))",
+     "legendFormat": "{{status}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "Web-search queries (privacy gate)",
+   "gridPos": {
+    "x": 12,
+    "y": 24,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": null
+   },
+   "targets": [
+    {
+     "expr": "sum by (outcome) (increase(sentinelai_web_search_queries_total[1h]))",
+     "legendFormat": "{{outcome}}",
+     "refId": "A"
+    }
+   ]
+  }
+ ]
+}

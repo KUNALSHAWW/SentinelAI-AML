@@ -1,54 +1,19 @@
 """
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║   ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗                ║
-║   ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║                ║
-║   ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║                ║
-║   ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║                ║
-║   ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗           ║
-║   ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝           ║
-║                              █████╗ ██╗                                       ║
-║                             ██╔══██╗██║                                       ║
-║                             ███████║██║                                       ║
-║                             ██╔══██║██║                                       ║
-║                             ██║  ██║██║                                       ║
-║                             ╚═╝  ╚═╝╚═╝                                       ║
-║                                                                               ║
-║   🛡️  SentinelAI - Financial Crime Intelligence Platform                      ║
-║   Enterprise-Grade AML Detection & Investigation System                       ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+SentinelAI - explainable Anti-Money-Laundering intelligence platform.
 
-SentinelAI is a next-generation Anti-Money Laundering (AML) detection platform
-powered by advanced AI, graph-based workflows, and intelligent reasoning.
-
-Features:
----------
-• Chain-of-Thought (CoT) & ReAct reasoning for intelligent analysis
-• Multi-agent LangGraph orchestration
-• Real-time transaction monitoring
-• Network analysis for hidden relationships
-• Regulatory compliance automation (SAR/STR generation)
-• Risk-based case prioritization
-• Human-in-the-loop review workflows
-
-Author: SentinelAI Team
-Version: 1.0.0
-License: MIT
+A deterministic detection engine (sanctions/PEP screening, jurisdiction risk,
+behavioural typologies, transaction-graph motifs, crypto and trade checks) fused
+with an exactly-decomposable noisy-OR score, plus guarded LLM research agents
+orchestrated by LangGraph that may raise - never lower - a risk score.
 """
 
-__version__ = "1.0.0"
-__author__ = "SentinelAI Team"
+from sentinelai.core.config import settings
+from sentinelai.core.logging import setup_logging
+
+__version__ = settings.app_version
+__author__ = "Kunal Shaw"
 __license__ = "MIT"
 
-from sentinelai.core.config import settings
-from sentinelai.core.logging import get_logger
+setup_logging(settings.monitoring.log_level, settings.monitoring.log_format, settings.monitoring.log_file)
 
-logger = get_logger(__name__)
-
-# Package exports
-__all__ = [
-    "__version__",
-    "settings",
-    "logger",
-]
+__all__ = ["__version__", "settings"]

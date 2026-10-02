@@ -1,236 +1,266 @@
 """
-SentinelAI Configuration Management
-===================================
+SentinelAI Configuration
+========================
 
-Centralized configuration using Pydantic Settings for type-safe,
-environment-aware configuration management.
+Type-safe settings. Every settings group reads both real environment
+variables *and* a local ``.env`` file, and unknown keys are ignored, so the
+``.env.example`` shipped with the repo works as-is.
 """
 
-from typing import List, Optional, Literal
-from pydantic_settings import BaseSettings
-from pydantic import Field, SecretStr, AliasChoices
+from __future__ import annotations
+
+import json
 from functools import lru_cache
-import os
+from typing import Annotated, Dict, List, Literal, Optional
+
+from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def _config(prefix: str) -> SettingsConfigDict:
+    return SettingsConfigDict(
+        env_prefix=prefix,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+
+def _csv_or_json_list(value):
+    """Accept ``["a","b"]`` (JSON) or ``a,b`` (CSV) for list-typed env vars."""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
+    return value
 
 
 class LLMSettings(BaseSettings):
-    """LLM Provider Configuration"""
-    
-    provider: Literal["groq", "huggingface"] = Field(
-        default="groq",
-        description="LLM provider to use"
-    )
+    """LLM provider and agent behaviour."""
+
+    model_config = _config("SENTINEL_LLM_")
+
+    provider: Literal["groq", "huggingface"] = "groq"
     groq_api_key: Optional[SecretStr] = Field(
-        default=None,
-        validation_alias=AliasChoices("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY")
+        default=None, validation_alias=AliasChoices("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY")
     )
-    groq_model: str = Field(
-        default="qwen/qwen3.6-27b",
-        description="Groq model to use"
-    )
+    groq_model: str = "qwen/qwen3.6-27b"
     tavily_api_key: Optional[SecretStr] = Field(
-        default=None,
-        validation_alias=AliasChoices("TAVILY_API_KEY", "SENTINEL_LLM_TAVILY_API_KEY")
+        default=None, validation_alias=AliasChoices("TAVILY_API_KEY", "SENTINEL_LLM_TAVILY_API_KEY")
     )
     huggingface_api_key: Optional[SecretStr] = Field(
         default=None,
-        validation_alias=AliasChoices("HUGGINGFACE_API_KEY", "SENTINEL_LLM_HUGGINGFACE_API_KEY")
+        validation_alias=AliasChoices("HUGGINGFACE_API_KEY", "SENTINEL_LLM_HUGGINGFACE_API_KEY"),
     )
-    huggingface_model: str = Field(
-        default="meta-llama/Llama-3.1-70B-Instruct",
-        description="HuggingFace model to use"
-    )
+    huggingface_model: str = "meta-llama/Llama-3.1-70B-Instruct"
     temperature: float = Field(default=0.0, ge=0, le=2)
     max_tokens: int = Field(default=4096, ge=1)
     max_retries: int = Field(default=3, ge=1)
     timeout: int = Field(default=60, ge=1)
 
-    class Config:
-        env_prefix = "SENTINEL_LLM_"
+    # --- agent safety / privacy -------------------------------------------
+    web_search_enabled: bool = Field(
+        default=False,
+        description="Allow research agents to query Tavily/DuckDuckGo. Off by default: "
+        "customer data must not leave the perimeter unless explicitly enabled.",
+    )
+    redact_pii: bool = Field(default=True, description="Redact IDs/emails/phones before any LLM call.")
+    agent_timeout_s: int = Field(default=90, ge=5, description="Per-agent wall-clock budget.")
+    agent_recursion_limit: int = Field(default=25, ge=3)
+    max_uplift: int = Field(
+        default=15, ge=0, le=50,
+        description="Maximum risk points the LLM layer may ADD. It can never lower a deterministic score.",
+    )
+
+    @property
+    def api_key_configured(self) -> bool:
+        if self.provider == "groq":
+            return bool(self.groq_api_key and self.groq_api_key.get_secret_value())
+        return bool(self.huggingface_api_key and self.huggingface_api_key.get_secret_value())
 
 
 class DatabaseSettings(BaseSettings):
-    """Database Configuration"""
-    
-    # PostgreSQL Settings
-    postgres_host: str = Field(default="localhost")
-    postgres_port: int = Field(default=5432)
-    postgres_user: str = Field(default="sentinel")
-    postgres_password: SecretStr = Field(default=SecretStr("sentinel_password"))
-    postgres_db: str = Field(default="sentinelai")
-    
-    # Direct URL override (for Render.com and other PaaS)
-    database_url_override: Optional[str] = Field(default=None, alias="DATABASE_URL")
-    redis_url_override: Optional[str] = Field(default=None, alias="REDIS_URL")
-    
-    # Redis Settings (for caching & pub/sub)
-    redis_host: str = Field(default="localhost")
-    redis_port: int = Field(default=6379)
-    redis_password: Optional[SecretStr] = Field(default=None)
-    redis_db: int = Field(default=0)
-    
-    # Neo4j Settings (for graph relationships)
-    neo4j_uri: str = Field(default="bolt://localhost:7687")
-    neo4j_user: str = Field(default="neo4j")
-    neo4j_password: SecretStr = Field(default=SecretStr("neo4j_password"))
+    """Persistence. SQLite by default (zero-config); PostgreSQL in production."""
+
+    model_config = _config("SENTINEL_DB_")
+
+    database_url_override: Optional[str] = Field(default=None, validation_alias="DATABASE_URL")
+    sqlite_path: str = "data/sentinelai.db"
+    auto_create_tables: bool = Field(
+        default=True, description="create_all() on startup (dev convenience). Disable when using Alembic migrations.")
+
+    postgres_host: Optional[str] = None
+    postgres_port: int = 5432
+    postgres_user: str = "sentinel"
+    postgres_password: SecretStr = SecretStr("sentinel_password")
+    postgres_db: str = "sentinelai"
+
+    redis_url_override: Optional[str] = Field(default=None, validation_alias="REDIS_URL")
+    redis_host: Optional[str] = None
+    redis_port: int = 6379
+    redis_password: Optional[SecretStr] = None
+    redis_db: int = 0
+
+    @staticmethod
+    def _async_url(url: str) -> str:
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql+asyncpg://", 1)
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if url.startswith("sqlite://") and "+aiosqlite" not in url:
+            return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+        return url
 
     @property
-    def postgres_url(self) -> str:
-        """Get PostgreSQL URL, preferring DATABASE_URL if set"""
+    def url(self) -> str:
+        """Async SQLAlchemy URL."""
         if self.database_url_override:
-            url = self.database_url_override
-            # Convert postgres:// to postgresql+asyncpg:// for SQLAlchemy async
-            if url.startswith("postgres://"):
-                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-            elif url.startswith("postgresql://"):
-                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            return url
-        password = self.postgres_password.get_secret_value()
-        return f"postgresql+asyncpg://{self.postgres_user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-    
-    @property
-    def postgres_url_sync(self) -> str:
-        """Get sync PostgreSQL URL for migrations"""
-        if self.database_url_override:
-            url = self.database_url_override
-            # Convert to sync driver
-            if url.startswith("postgres://"):
-                return url.replace("postgres://", "postgresql://", 1)
-            if "+asyncpg" in url:
-                return url.replace("+asyncpg", "")
-            return url
-        password = self.postgres_password.get_secret_value()
-        return f"postgresql://{self.postgres_user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            return self._async_url(self.database_url_override)
+        if self.postgres_host:
+            pw = self.postgres_password.get_secret_value()
+            return (
+                f"postgresql+asyncpg://{self.postgres_user}:{pw}"
+                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            )
+        return f"sqlite+aiosqlite:///{self.sqlite_path}"
 
     @property
-    def redis_url(self) -> str:
-        """Get Redis URL, preferring REDIS_URL if set"""
+    def sync_url(self) -> str:
+        """Sync URL for Alembic."""
+        return (
+            self.url.replace("+asyncpg", "").replace("+aiosqlite", "")
+        )
+
+    @property
+    def postgres_url(self) -> str:  # backwards-compatible alias
+        return self.url
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.url.startswith("sqlite")
+
+    @property
+    def redis_url(self) -> Optional[str]:
         if self.redis_url_override:
-            return self.redis_url_override
-        if self.redis_password:
-            return f"redis://:{self.redis_password.get_secret_value()}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
-        return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
-
-    class Config:
-        env_prefix = "SENTINEL_DB_"
-        populate_by_name = True
+            return self.redis_url_override or None
+        if self.redis_host:
+            if self.redis_password:
+                return f"redis://:{self.redis_password.get_secret_value()}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
+            return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
+        return None
 
 
 class RiskSettings(BaseSettings):
-    """Risk Assessment Configuration"""
-    
-    # Risk Thresholds
-    low_risk_threshold: int = Field(default=30)
-    medium_risk_threshold: int = Field(default=60)
-    high_risk_threshold: int = Field(default=80)
-    critical_risk_threshold: int = Field(default=95)
-    
-    # Transaction Thresholds
-    large_transaction_threshold: float = Field(default=10000.0)
-    very_large_transaction_threshold: float = Field(default=100000.0)
-    structuring_threshold: float = Field(default=9500.0)
-    
-    # Velocity Thresholds
-    max_daily_transactions: int = Field(default=10)
-    max_daily_amount: float = Field(default=50000.0)
-    new_account_days: int = Field(default=30)
-    
-    # High-Risk Jurisdictions
-    high_risk_countries: List[str] = Field(
-        default=["IR", "KP", "SY", "CU", "MM", "RU", "BY", "VE", "ZW", "AF", "YE", "SO", "LY"]
-    )
-    tax_havens: List[str] = Field(
-        default=["KY", "VG", "BM", "PA", "MT", "AE", "JE", "GG", "IM", "BZ", "SC", "MU", "LI", "MC"]
-    )
-    grey_list_countries: List[str] = Field(
-        default=["PK", "NG", "PH", "TZ", "UG", "JM", "HT", "AL", "BA"]
+    """Scoring thresholds. All amounts are USD-equivalent unless stated."""
+
+    model_config = _config("SENTINEL_RISK_")
+
+    regime: Literal["US_BSA", "IN_PMLA", "EU_AMLD"] = "US_BSA"
+
+    # Score bands: LOW < medium <= MEDIUM < high <= HIGH < critical <= CRITICAL
+    medium_risk_threshold: int = Field(default=30, ge=1, le=100)
+    high_risk_threshold: int = Field(default=60, ge=1, le=100)
+    critical_risk_threshold: int = Field(default=80, ge=1, le=100)
+    sar_score_threshold: int = Field(default=60, ge=1, le=100)
+
+    large_transaction_threshold: float = 10_000.0
+    very_large_transaction_threshold: float = 100_000.0
+
+    max_daily_transactions: int = 10
+    max_daily_amount: float = 50_000.0
+    new_account_days: int = 30
+
+    # Fuzzy-matching calibration (OFAC: "calibrate to your risk profile and test routinely")
+    sanctions_match_threshold: float = Field(default=0.92, ge=0.5, le=1.0)
+    sanctions_review_threshold: float = Field(default=0.85, ge=0.5, le=1.0)
+    pep_match_threshold: float = Field(default=0.92, ge=0.5, le=1.0)
+    lists_dir: str = "data/lists"
+
+    jurisdictions_file: Optional[str] = None
+    sanctions_list_file: Optional[str] = None
+    fx_rates: Annotated[Dict[str, float], NoDecode] = Field(
+        default_factory=dict, description="Override USD-per-unit FX rates, e.g. '{\"INR\":0.0113}'."
     )
 
-    class Config:
-        env_prefix = "SENTINEL_RISK_"
+    @field_validator("fx_rates", mode="before")
+    @classmethod
+    def _parse_fx(cls, value):
+        if isinstance(value, str):
+            return json.loads(value) if value.strip() else {}
+        return value
 
 
 class APISettings(BaseSettings):
-    """API Server Configuration"""
-    
-    host: str = Field(default="0.0.0.0")
-    port: int = Field(default=8000)
-    workers: int = Field(default=4)
-    reload: bool = Field(default=False)
-    debug: bool = Field(default=False)
-    
-    # CORS
-    cors_origins: List[str] = Field(default=["*"])
-    cors_allow_credentials: bool = Field(default=True)
-    
-    # Rate Limiting
-    rate_limit_requests: int = Field(default=100)
-    rate_limit_period: int = Field(default=60)  # seconds
-    
-    # Authentication
-    jwt_secret: SecretStr = Field(default=SecretStr("your-super-secret-jwt-key-change-in-production"))
-    jwt_algorithm: str = Field(default="HS256")
-    jwt_expiry_hours: int = Field(default=24)
-    
-    # API Keys
-    api_key_header: str = Field(default="X-API-Key")
+    """HTTP server, auth and abuse protection."""
 
-    class Config:
-        env_prefix = "SENTINEL_API_"
+    model_config = _config("SENTINEL_API_")
+
+    host: str = "0.0.0.0"
+    port: int = Field(default=8000, validation_alias=AliasChoices("SENTINEL_API_PORT", "PORT"))
+    workers: int = 1
+    reload: bool = False
+    debug: bool = False
+
+    cors_origins: Annotated[List[str], NoDecode] = ["*"]
+    rate_limit_requests: int = 100
+    rate_limit_period: int = 60
+    demo_rate_limit_requests: int = Field(default=20, description="Stricter limit for unauthenticated public-demo callers.")
+    trust_proxy: bool = Field(default=False, description="Honour X-Forwarded-For for client IPs.")
+
+    api_keys: str = Field(
+        default="",
+        description="Comma-separated 'name:role:key' entries. Roles: viewer, analyst, admin.",
+    )
+    public_demo: bool = Field(
+        default=False,
+        description="Allow unauthenticated, rate-limited, NON-persisting analysis for public demos.",
+    )
+    api_key_header: str = "X-API-Key"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_origins(cls, value):
+        return _csv_or_json_list(value)
 
 
 class MonitoringSettings(BaseSettings):
-    """Monitoring & Observability Configuration"""
-    
-    # Logging
-    log_level: str = Field(default="INFO")
-    log_format: str = Field(default="json")  # json or text
-    log_file: Optional[str] = Field(default="logs/sentinelai.log")
-    
-    # Metrics
-    metrics_enabled: bool = Field(default=True)
-    metrics_port: int = Field(default=9090)
-    
-    # Tracing
-    tracing_enabled: bool = Field(default=False)
-    jaeger_host: str = Field(default="localhost")
-    jaeger_port: int = Field(default=6831)
-    
-    # Health Checks
-    health_check_interval: int = Field(default=30)
+    """Logging and metrics."""
 
-    class Config:
-        env_prefix = "SENTINEL_MONITOR_"
+    model_config = _config("SENTINEL_MONITOR_")
+
+    log_level: str = "INFO"
+    log_format: Literal["json", "text"] = "json"
+    log_file: Optional[str] = None
+    metrics_enabled: bool = True
 
 
 class Settings(BaseSettings):
-    """Master Settings Configuration"""
-    
-    # Application Info
-    app_name: str = Field(default="SentinelAI")
-    app_version: str = Field(default="1.0.0")
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development"
-    )
-    
-    # Nested Settings
+    """Master settings object."""
+
+    model_config = _config("SENTINEL_")
+
+    app_name: str = "SentinelAI"
+    app_version: str = "2.0.0"
+    environment: Literal["development", "staging", "production", "test"] = "development"
+
     llm: LLMSettings = Field(default_factory=LLMSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     risk: RiskSettings = Field(default_factory=RiskSettings)
     api: APISettings = Field(default_factory=APISettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
-    class Config:
-        env_prefix = "SENTINEL_"
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
-    """Get cached settings instance"""
     return Settings()
 
 
-# Global settings instance
 settings = get_settings()

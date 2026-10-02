@@ -1,397 +1,355 @@
 """
-SentinelAI Analysis Service
-===========================
+Analysis service
+================
 
-High-level service for transaction analysis operations.
+Orchestrates one analysis end to end:
+
+    request -> engine input -> (persisted graph neighbourhood) -> LangGraph pipeline
+            -> alerts + case + audit entry + persisted graph edges -> response
+
+Everything that changes state happens in a single database transaction, and the
+response says exactly how it was produced (``mode``, ``llm_status``, ``warnings``).
 """
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import time
 import uuid
+from datetime import timedelta
+from typing import Any, Dict, List, Optional, Set
+
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelai.agents.orchestrator import AMLOrchestrator
-from sentinelai.agents.specialized import AMLState
-from sentinelai.models.schemas import (
-    AnalysisRequest,
-    AnalysisResponse,
-    RiskAssessmentResult,
-    RiskFactor,
-    LLMAnalysisResult,
-    AlertResponse,
-    CaseResponse,
-    RiskLevelEnum,
-    AlertTypeEnum,
-)
+from sentinelai.core import metrics
 from sentinelai.core.config import settings
 from sentinelai.core.logging import get_logger
+from sentinelai.core.regimes import get_regime
+from sentinelai.core.security import Principal
+from sentinelai.core.time import utcnow
+from sentinelai.db.session import session_scope
+from sentinelai.engine import build_input
+from sentinelai.engine.graph import edges_from_input
+from sentinelai.engine.scoring import ScoreResult
+from sentinelai.engine.types import Edge, Signal
+from sentinelai.models.database import Alert, Analysis, GraphEdge
+from sentinelai.models.schemas import (
+    AlertResponse,
+    AnalysisRequest,
+    AnalysisResponse,
+    BatchAnalysisResponse,
+    BatchItemResult,
+    CaseCreateRequest,
+    CaseResponse,
+    Explanation,
+    LLMAnalysisResult,
+    RiskAssessmentResult,
+    RiskFactor,
+    RiskLevelEnum,
+)
+from sentinelai.services.audit import audit, canonical
+from sentinelai.services.case_management import CaseManagementService
 
 logger = get_logger(__name__)
 
+_SEVERITY_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+GRAPH_LOOKBACK = timedelta(days=30)
+GRAPH_EDGE_LIMIT = 400
+
+
+class AnalysisNotFound(LookupError):
+    pass
+
 
 class AnalysisService:
-    """
-    Service for managing transaction analysis operations.
-    
-    Provides a high-level interface for running analyses,
-    formatting results, and managing the analysis lifecycle.
-    """
-    
-    def __init__(self):
-        self.orchestrator = AMLOrchestrator()
-        self.logger = get_logger("service.analysis")
-    
-    async def analyze_transaction(
-        self,
-        request: AnalysisRequest,
-        progress_callback=None
-    ) -> AnalysisResponse:
-        """
-        Analyze a single transaction.
+    def __init__(self, orchestrator: Optional[AMLOrchestrator] = None, cases: Optional[CaseManagementService] = None):
+        self._orchestrator = orchestrator
+        self.cases = cases or CaseManagementService()
 
-        Args:
-            request: Analysis request containing transaction and customer data
-            progress_callback: Optional async callback invoked with progress steps
+    @property
+    def orchestrator(self) -> AMLOrchestrator:
+        if self._orchestrator is None:
+            self._orchestrator = AMLOrchestrator()
+        return self._orchestrator
 
-        Returns:
-            Formatted analysis response
-        """
-        start_time = datetime.utcnow()
-        request_id = str(uuid.uuid4())
-        
-        self.logger.info(
-            "Starting transaction analysis",
-            extra={"request_id": request_id}
-        )
-        
-        try:
-            # Convert Pydantic models to dicts for processing
-            transaction_dict = request.transaction.model_dump()
-            customer_dict = request.customer.model_dump()
-            
-            # Handle datetime serialization
-            if transaction_dict.get("timestamp"):
-                if isinstance(transaction_dict["timestamp"], datetime):
-                    pass  # Already datetime
-                else:
-                    transaction_dict["timestamp"] = datetime.fromisoformat(
-                        str(transaction_dict["timestamp"]).replace("Z", "+00:00")
-                    )
-            
-            # Process transaction history timestamps
-            for tx in customer_dict.get("transaction_history", []):
-                if tx.get("timestamp") and not isinstance(tx["timestamp"], datetime):
-                    tx["timestamp"] = datetime.fromisoformat(
-                        str(tx["timestamp"]).replace("Z", "+00:00")
-                    )
-            
-            # Run analysis
-            result = await self.orchestrator.analyze(
-                transaction_dict,
-                customer_dict,
-                config={
-                    "enable_llm": request.enable_llm_analysis,
-                    "enable_network": request.enable_network_analysis,
-                    "priority": request.priority.value,
-                },
-                progress_callback=progress_callback,
-            )
-            
-            # Calculate processing time
-            processing_time_ms = int(
-                (datetime.utcnow() - start_time).total_seconds() * 1000
-            )
-            
-            # Build response
-            response = self._build_response(
-                result,
-                request_id,
-                request.correlation_id,
-                processing_time_ms
-            )
-            
-            self.logger.info(
-                "Transaction analysis completed",
-                extra={
-                    "request_id": request_id,
-                    "risk_score": response.risk_assessment.risk_score,
-                    "risk_level": response.risk_assessment.risk_level,
-                    "processing_time_ms": processing_time_ms,
-                }
-            )
-            
-            return response
-            
-        except Exception as e:
-            self.logger.error(
-                f"Transaction analysis failed: {str(e)}",
-                extra={"request_id": request_id}
-            )
-            raise
-    
-    async def batch_analyze(
-        self,
-        requests: List[AnalysisRequest],
-        max_concurrent: int = 5
-    ) -> List[AnalysisResponse]:
-        """
-        Analyze multiple transactions in parallel.
-        
-        Args:
-            requests: List of analysis requests
-            max_concurrent: Maximum concurrent analyses
-            
-        Returns:
-            List of analysis responses
-        """
-        cases = []
-        for req in requests:
-            transaction_dict = req.transaction.model_dump()
-            customer_dict = req.customer.model_dump()
-            
-            # Handle timestamp
-            if transaction_dict.get("timestamp"):
-                if isinstance(transaction_dict["timestamp"], str):
-                    transaction_dict["timestamp"] = datetime.fromisoformat(
-                        transaction_dict["timestamp"].replace("Z", "+00:00")
-                    )
-            
-            cases.append({
-                "transaction": transaction_dict,
-                "customer": customer_dict,
-            })
-        
-        results = await self.orchestrator.batch_analyze(cases, max_concurrent)
-        
-        responses = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                self.logger.error(f"Batch item {i} failed: {str(result)}")
+    # --------------------------------------------------------------- graph store
+    async def _load_neighbourhood(self, session: AsyncSession, focus: Set[str], now) -> List[Edge]:
+        """Edges within two hops of ``focus`` seen in earlier analyses (the graph has memory)."""
+        if not focus:
+            return []
+        since = now - GRAPH_LOOKBACK
+        edges: Dict[str, Edge] = {}
+        frontier = set(focus)
+        for _ in range(2):
+            rows = (await session.execute(
+                select(GraphEdge).where(GraphEdge.timestamp >= since,
+                                        or_(GraphEdge.source.in_(frontier), GraphEdge.target.in_(frontier)))
+                .order_by(GraphEdge.timestamp.desc()).limit(GRAPH_EDGE_LIMIT))).scalars().all()
+            nxt = set()
+            for r in rows:
+                e = Edge(r.source, r.target, r.amount_usd, r.timestamp, r.ref)
+                edges[e.key()] = e
+                nxt |= {r.source, r.target}
+            frontier = nxt - focus
+            if not frontier:
+                break
+        return list(edges.values())
+
+    async def _persist_edges(self, session: AsyncSession, edges: List[Edge], analysis_id: uuid.UUID) -> int:
+        if not edges:
+            return 0
+        keys = [e.key() for e in edges]
+        existing = set((await session.execute(select(GraphEdge.edge_key).where(GraphEdge.edge_key.in_(keys)))).scalars())
+        added = 0
+        for e in edges:
+            if e.key() in existing:
                 continue
-            
-            response = self._build_response(
-                result,
-                str(uuid.uuid4()),
-                requests[i].correlation_id if i < len(requests) else None,
-                int(result.get("processing_time_ms", 0))
-            )
-            responses.append(response)
-        
-        return responses
-    
-    def _build_response(
-        self,
-        state: AMLState,
-        request_id: str,
-        correlation_id: Optional[str],
-        processing_time_ms: int
+            session.add(GraphEdge(source=e.source, target=e.target, amount_usd=e.amount_usd, timestamp=e.timestamp,
+                                  analysis_id=analysis_id, ref=e.ref, edge_key=e.key()))
+            added += 1
+        return added
+
+    # --------------------------------------------------------------------- main
+    async def analyze_transaction(
+        self, request: AnalysisRequest, principal: Optional[Principal] = None, progress_callback=None,
     ) -> AnalysisResponse:
-        """Build formatted response from analysis state"""
-        
-        # Build risk factors
-        risk_factors = []
-        for rf in state.get("risk_factors", []):
-            # Determine severity and category
-            severity = RiskLevelEnum.MEDIUM
-            category = "GENERAL"
-            score = 10
-            
-            if any(kw in rf.upper() for kw in ["SANCTION", "DARKNET", "CRITICAL"]):
-                severity = RiskLevelEnum.CRITICAL
-                score = 40
-            elif any(kw in rf.upper() for kw in ["HIGH_RISK", "MIXER", "PEP"]):
-                severity = RiskLevelEnum.HIGH
-                score = 25
-            elif any(kw in rf.upper() for kw in ["TAX_HAVEN", "STRUCTURING"]):
-                severity = RiskLevelEnum.MEDIUM
-                score = 15
-            
-            if "SANCTION" in rf.upper():
-                category = "SANCTIONS"
-            elif "PEP" in rf.upper():
-                category = "PEP"
-            elif "CRYPTO" in rf.upper():
-                category = "CRYPTO"
-            elif "GEO" in rf.upper() or "JURISDICTION" in rf.upper():
-                category = "GEOGRAPHIC"
-            elif "STRUCT" in rf.upper() or "VELOCITY" in rf.upper():
-                category = "BEHAVIORAL"
-            elif "DOC" in rf.upper() or "TBML" in rf.upper():
-                category = "DOCUMENTATION"
-            
-            risk_factors.append(RiskFactor(
-                code=rf,
-                description=rf.replace("_", " ").title(),
-                severity=severity,
-                score=score,
-                category=category
-            ))
-        
-        # Build risk assessment
-        risk_assessment = RiskAssessmentResult(
-            risk_score=state.get("risk_score", 0),
-            risk_level=RiskLevelEnum(state.get("risk_level", "LOW")),
-            risk_factors=risk_factors,
-            decision_path=state.get("decision_path", []),
-            alerts_triggered=state.get("alerts", [])
+        started = time.perf_counter()
+        principal = principal or Principal("system", "analyst")
+        persist = request.persist and not principal.is_demo
+        analysis_id = uuid.uuid4()
+
+        tx = request.transaction.model_dump(mode="python")
+        customer = request.customer.model_dump(mode="python")
+        network = [n.model_dump(mode="python") for n in request.network_transactions]
+        ctx = build_input(tx, customer, network, regime=request.regime,
+                          confidential=request.restrict_external_lookup, enable_graph=request.enable_network_analysis)
+        request_hash = hashlib.sha256(canonical(request.model_dump(mode="json", exclude={"correlation_id", "batch_id"})).encode()).hexdigest()
+
+        # Phase 1 - short read transaction: the persisted graph neighbourhood.
+        extra: List[Edge] = []
+        if persist and request.enable_network_analysis:
+            all_edges = edges_from_input(ctx)
+            focus = {ctx.sender, ctx.receiver} | {e.source for e in all_edges} | {e.target for e in all_edges}
+            async with session_scope() as session:
+                extra = await self._load_neighbourhood(session, focus, ctx.timestamp)
+
+        # Phase 2 - the pipeline (may run for a minute of LLM calls): NO database transaction is held open.
+        state = await self.orchestrator.analyze(
+            ctx, extra_edges=extra, research=request.enable_llm_analysis,
+            confidential=request.restrict_external_lookup, progress_callback=progress_callback)
+
+        engine, score, decision = state["engine"], state["score"], state["decision"]
+        signals: List[Signal] = state["signals"]
+        alerts_payload = self._derive_alerts(signals)
+        mode = "hybrid" if state.get("llm_status") in ("ok", "partial") and state.get("findings") else "deterministic"
+
+        # Phase 3 - one short write transaction: alerts, case, audit entry, analysis row and graph edges together.
+        case_orm = None
+        alert_rows: List[Alert] = []
+        audit_info = None
+        async with session_scope() as session:
+            if persist:
+                alert_rows = [Alert(analysis_id=analysis_id, **a) for a in alerts_payload]
+                session.add_all(alert_rows)
+                await session.flush()
+                if decision["report_required"]:
+                    regime = get_regime(ctx.regime)
+                    derived = "MEDIUM" if score.level == "LOW" else score.level
+                    requested = request.priority.value
+                    priority = requested if _SEVERITY_RANK[requested] > _SEVERITY_RANK[derived] else derived
+                    case_orm = await self.cases.create_case(
+                        CaseCreateRequest(
+                            title=f"{regime.suspicious_report} review - {ctx.customer_name or 'unknown'} - score {score.score}",
+                            description=state.get("summary"), priority=priority, analysis_id=analysis_id,
+                            alert_ids=[a.id for a in alert_rows]),
+                        actor=principal.name, session=session, report=state.get("report"),
+                        ai_summary=state.get("summary"), ai_recommendation=decision["recommended_action"],
+                        regime=ctx.regime)
+                    if state.get("report"):
+                        state["report"]["case_number"] = case_orm.case_number
+                        case_orm.report = dict(state["report"])      # new object so the JSON change is persisted
+                entry = await audit.append(
+                    session, actor=principal.name, action="analysis.complete", entity_type="analysis",
+                    entity_id=str(analysis_id),
+                    payload={"risk_score": score.score, "risk_level": score.level,
+                             "action": decision["recommended_action"], "report_required": decision["report_required"],
+                             "mode": mode, "request_hash": request_hash, "regime": ctx.regime,
+                             "signals": sorted({s.code for s in signals}),
+                             "case": case_orm.case_number if case_orm else None})
+                audit_info = {"seq": entry.seq, "entry_hash": entry.hash, "prev_hash": entry.prev_hash,
+                              "request_hash": request_hash}
+
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            response = self._build_response(
+                analysis_id if persist else None, request, ctx, state, signals, alerts_payload, alert_rows, case_orm,
+                audit_info, mode, elapsed_ms)
+
+            if persist:
+                session.add(Analysis(
+                    id=analysis_id, request_hash=request_hash, customer_id=ctx.customer_id[:200],
+                    customer_name=ctx.customer_name[:500], amount=ctx.amount, currency=ctx.currency,
+                    amount_usd=ctx.amount_usd, transaction_type=ctx.transaction_type[:32],
+                    origin_country=ctx.origin_country or None, destination_country=ctx.destination_country or None,
+                    regime=ctx.regime, mode=mode, risk_score=score.score, risk_level=score.level,
+                    recommended_action=decision["recommended_action"], report_required=decision["report_required"],
+                    response=json.loads(response.model_dump_json())))
+                await session.flush()
+                await self._persist_edges(session, edges_from_input(ctx), analysis_id)
+
+        self._record_metrics(score, mode, signals, engine, decision, elapsed_ms / 1000)
+        return response
+
+    # ------------------------------------------------------------------ helpers
+    @staticmethod
+    def _derive_alerts(signals: List[Signal]) -> List[Dict[str, Any]]:
+        grouped: Dict[str, List[Signal]] = {}
+        for s in signals:
+            if s.alert_type:
+                grouped.setdefault(s.alert_type, []).append(s)
+        out = []
+        for alert_type, group in grouped.items():
+            group.sort(key=lambda s: -s.weight)
+            top = group[0]
+            out.append({
+                "alert_type": alert_type, "severity": top.severity, "title": top.description[:100],
+                "description": " | ".join(s.description for s in group)[:2000],
+                "signal_codes": [s.code for s in group],
+                "confidence_score": round(min(0.99, max(s.weight for s in group) + 0.2), 2),
+            })
+        out.sort(key=lambda a: -_SEVERITY_RANK[a["severity"]])
+        return out
+
+    def _build_response(self, analysis_id, request, ctx, state, signals, alerts_payload, alert_rows, case_orm,
+                        audit_info, mode, elapsed_ms) -> AnalysisResponse:
+        engine, score, decision = state["engine"], state["score"], state["decision"]
+        regime = get_regime(ctx.regime)
+        factors = []
+        for c in score.contributions:
+            factors.append(RiskFactor(
+                code=c["code"], description=c["description"], severity=RiskLevelEnum(c["severity"]), score=c["points"],
+                category=c["category"], typology=c.get("typology")))
+
+        findings = [f.public() for f in state.get("findings", [])]
+        llm = LLMAnalysisResult(
+            summary=state.get("summary", ""),
+            risk_indicators=[f.description for f in factors[:8]],
+            reasoning=" -> ".join(state.get("decision_path", [])),
+            confidence_score=0.9 if mode == "deterministic" else 0.8,
+            recommendation=decision["recommended_action"],
+            additional_context={"summary_source": state.get("summary_source"), "ai_findings": findings},
         )
-        
-        # Build LLM analysis result
-        llm_analysis = None
-        llm_data = state.get("llm_analysis", {})
-        if llm_data:
-            edd = llm_data.get("enhanced_due_diligence", {})
-            llm_analysis = LLMAnalysisResult(
-                summary=edd.get("full_analysis", "")[:500] if edd else "Analysis completed",
-                risk_indicators=edd.get("risk_codes", []) if edd else [],
-                reasoning=" → ".join(state.get("decision_path", [])),
-                confidence_score=edd.get("confidence", 0.7) if edd else 0.7,
-                recommendation=self._get_recommendation(state),
-                additional_context=llm_data
-            )
-        
-        # Build alerts
-        alerts = []
-        for i, alert_text in enumerate(state.get("alerts", [])):
-            alert_type = AlertTypeEnum.UNUSUAL_ACTIVITY
-            severity = RiskLevelEnum.MEDIUM
-            
-            if "SANCTION" in alert_text.upper():
-                alert_type = AlertTypeEnum.SANCTIONS_HIT
-                severity = RiskLevelEnum.CRITICAL
-            elif "PEP" in alert_text.upper():
-                alert_type = AlertTypeEnum.PEP_MATCH
-                severity = RiskLevelEnum.HIGH
-            elif "STRUCTUR" in alert_text.upper():
-                alert_type = AlertTypeEnum.STRUCTURING
-                severity = RiskLevelEnum.HIGH
-            elif "VELOCITY" in alert_text.upper():
-                alert_type = AlertTypeEnum.VELOCITY_BREACH
-                severity = RiskLevelEnum.MEDIUM
-            elif "CRYPTO" in alert_text.upper() or "MIXER" in alert_text.upper():
-                alert_type = AlertTypeEnum.CRYPTO_RISK
-                severity = RiskLevelEnum.HIGH
-            elif "JURISDICTION" in alert_text.upper():
-                alert_type = AlertTypeEnum.HIGH_RISK_JURISDICTION
-                severity = RiskLevelEnum.HIGH
-            elif "DOC" in alert_text.upper():
-                alert_type = AlertTypeEnum.DOCUMENT_MISMATCH
-                severity = RiskLevelEnum.MEDIUM
-            
-            alerts.append(AlertResponse(
-                id=uuid.uuid4(),
-                alert_type=alert_type,
-                severity=severity,
-                title=alert_text[:100],
-                description=alert_text,
-                risk_factors=[rf.code for rf in risk_factors[:3]],
-                confidence_score=0.8,
-                created_at=datetime.utcnow()
-            ))
-        
-        # Build case response if SAR required
-        case = None
-        if state.get("sar_required") or state.get("case_id"):
-            case = CaseResponse(
-                id=uuid.uuid4(),
-                case_number=state.get("case_id", f"CASE-{uuid.uuid4().hex[:8].upper()}"),
-                title=f"Suspicious Activity - Risk Score {state.get('risk_score', 0)}",
-                status="SAR_FILED" if state.get("reporting_status") == "SAR_GENERATED" else "OPEN",
-                priority=RiskLevelEnum(state.get("risk_level", "MEDIUM")),
-                assigned_to=None,
-                ai_summary=llm_analysis.summary if llm_analysis else None,
-                ai_recommendation=llm_analysis.recommendation if llm_analysis else None,
-                sar_filed=state.get("reporting_status") == "SAR_GENERATED",
-                review_deadline=datetime.fromisoformat(state["review_deadline"]) 
-                    if state.get("review_deadline") else None,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-        
-        # Determine action required
-        risk_score = state.get("risk_score", 0)
-        action_required = risk_score >= settings.risk.medium_risk_threshold
-        
-        # Build next steps
-        next_steps = self._get_next_steps(state)
-        
-        # SAR deadline
-        sar_deadline = None
-        if state.get("sar_required"):
-            sar_deadline = datetime.utcnow() + timedelta(days=30)
-        
+
+        if alert_rows:
+            alerts = [AlertResponse.model_validate(a) for a in alert_rows]
+        else:  # not persisted: synthesize ephemeral alert objects
+            alerts = [AlertResponse(id=uuid.uuid4(), alert_type=a["alert_type"], severity=a["severity"],
+                                    title=a["title"], description=a["description"], risk_factors=a["signal_codes"],
+                                    confidence_score=a["confidence_score"], created_at=utcnow()) for a in alerts_payload]
+
+        report = state.get("report")
+        warnings = list(state.get("warnings", []))
+        j_info = engine_screening_info(engine)
+        if j_info["sanctions"]["list"]["synthetic"]:
+            warnings.append("Sanctions screening used the synthetic DEMO list - load OFAC data for real screening "
+                            "(`sentinelai sanctions update`)")
         return AnalysisResponse(
-            request_id=request_id,
-            correlation_id=correlation_id,
-            processed_at=datetime.utcnow(),
-            processing_time_ms=processing_time_ms,
-            risk_assessment=risk_assessment,
-            llm_analysis=llm_analysis,
-            case=case,
-            alerts=alerts,
-            action_required=action_required,
-            recommended_action=self._get_recommendation(state),
-            next_steps=next_steps,
-            sar_required=state.get("sar_required", False),
-            sar_deadline=sar_deadline
-        )
-    
-    def _get_recommendation(self, state: AMLState) -> str:
-        """Get recommended action based on state"""
-        if state.get("sanction_hits"):
-            return "BLOCK_AND_FILE_SAR"
-        
-        risk_score = state.get("risk_score", 0)
-        
-        if risk_score >= settings.risk.critical_risk_threshold:
-            return "FILE_SAR_IMMEDIATELY"
-        elif risk_score >= settings.risk.high_risk_threshold:
-            return "FILE_SAR"
-        elif risk_score >= settings.risk.medium_risk_threshold:
-            return "ESCALATE_FOR_REVIEW"
-        elif risk_score >= settings.risk.low_risk_threshold:
-            return "MONITOR"
-        else:
-            return "CLEAR"
-    
-    def _get_next_steps(self, state: AMLState) -> List[str]:
-        """Get next steps based on state"""
-        steps = []
-        
-        if state.get("sanction_hits"):
-            steps.extend([
-                "Block transaction immediately",
-                "Notify compliance officer",
-                "File SAR within 30 days",
-                "Preserve all related documentation",
-                "Consider law enforcement referral"
-            ])
-        elif state.get("sar_required"):
-            steps.extend([
-                "Review generated SAR narrative",
-                "Complete SAR filing within 30 days",
-                "Document investigation findings",
-                "Schedule follow-up review"
-            ])
-        elif state.get("pep_status"):
-            steps.extend([
-                "Conduct enhanced due diligence",
-                "Obtain senior management approval",
-                "Document source of funds",
-                "Implement enhanced monitoring"
-            ])
-        elif state.get("risk_score", 0) >= settings.risk.medium_risk_threshold:
-            steps.extend([
-                "Assign to compliance analyst",
-                "Review within 24 hours",
-                "Request additional documentation if needed",
-                "Document decision and rationale"
-            ])
-        else:
-            steps.append("No immediate action required")
-            steps.append("Continue standard monitoring")
-        
-        return steps
-    
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get service metrics"""
-        return self.orchestrator.get_agent_metrics()
+            analysis_id=analysis_id, correlation_id=request.correlation_id, processing_time_ms=elapsed_ms,
+            mode=mode, llm_status=state.get("llm_status", "disabled"), warnings=warnings,
+            regime=regime.as_dict(),
+            risk_assessment=RiskAssessmentResult(
+                risk_score=score.score, risk_level=RiskLevelEnum(score.level), risk_factors=factors,
+                decision_path=state.get("decision_path", []),
+                alerts_triggered=[a["alert_type"] for a in alerts_payload]),
+            explanation=Explanation(
+                contributions=score.contributions, category_scores=score.category_scores,
+                counterfactuals=score.counterfactuals, floor_applied=score.floor_applied,
+                ai_uplift_cap=settings.llm.max_uplift),
+            typologies=engine.typologies,
+            screening=j_info,
+            graph={"nodes": engine.graph.nodes, "edges": engine.graph.edges, "highlights": engine.graph.highlights},
+            ai_findings=findings, llm_analysis=llm,
+            case=CaseResponse.model_validate(case_orm) if case_orm else None, alerts=alerts,
+            action_required=decision["recommended_action"] != "APPROVE",
+            recommended_action=decision["recommended_action"],
+            next_steps=next_steps(decision, regime, engine),
+            sar_required=decision["report_required"],
+            sar_deadline=regime.filing_deadline() if decision["report_required"] else None,
+            report=report, audit=audit_info)
+
+    @staticmethod
+    def _record_metrics(score: ScoreResult, mode, signals, engine, decision, seconds) -> None:
+        metrics.ANALYSES.labels(score.level, mode).inc()
+        metrics.ANALYSIS_LATENCY.labels(mode).observe(seconds)
+        for s in signals:
+            metrics.SIGNALS.labels(s.code).inc()
+        for m in engine.sanctions_matches:
+            metrics.SANCTIONS_HITS.labels(m["level"]).inc()
+        if decision["report_required"]:
+            metrics.REPORTS_REQUIRED.inc()
+
+    # -------------------------------------------------------------------- batch
+    async def batch_analyze(self, requests: List[AnalysisRequest], principal: Optional[Principal] = None,
+                            max_concurrent: int = 5, batch_id: Optional[str] = None) -> BatchAnalysisResponse:
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def one(i: int, req: AnalysisRequest) -> BatchItemResult:
+            async with sem:
+                try:
+                    return BatchItemResult(index=i, status="ok", result=await self.analyze_transaction(req, principal))
+                except Exception as exc:
+                    logger.error("Batch item %s failed", i, exc_info=True)
+                    return BatchItemResult(index=i, status="error", error=f"{type(exc).__name__}")
+
+        items = await asyncio.gather(*[one(i, r) for i, r in enumerate(requests)])
+        ok = sum(1 for i in items if i.status == "ok")
+        return BatchAnalysisResponse(batch_id=batch_id, total=len(items), succeeded=ok, failed=len(items) - ok,
+                                     items=list(items))
+
+    async def get_analysis(self, analysis_id: uuid.UUID) -> Dict[str, Any]:
+        async with session_scope() as session:
+            row = await session.get(Analysis, analysis_id)
+            if row is None:
+                raise AnalysisNotFound(str(analysis_id))
+            return row.response
+
+    async def list_analyses(self, limit: int = 50, offset: int = 0, min_score: Optional[int] = None) -> List[Dict[str, Any]]:
+        async with session_scope() as session:
+            q = select(Analysis).order_by(Analysis.created_at.desc())
+            if min_score is not None:
+                q = q.where(Analysis.risk_score >= min_score)
+            rows = (await session.execute(q.limit(limit).offset(offset))).scalars().all()
+            return [{"analysis_id": str(r.id), "created_at": r.created_at.isoformat(), "customer_name": r.customer_name,
+                     "amount_usd": r.amount_usd, "risk_score": r.risk_score, "risk_level": r.risk_level,
+                     "recommended_action": r.recommended_action, "report_required": r.report_required,
+                     "mode": r.mode} for r in rows]
+
+
+def engine_screening_info(engine) -> Dict[str, Any]:
+    return {
+        "sanctions": {"list": engine.sanctions_info, "matches": engine.sanctions_matches},
+        "pep": engine.pep,
+        "injection_detected": bool(engine.injection_hits),
+    }
+
+
+def next_steps(decision: Dict[str, Any], regime, engine) -> List[str]:
+    rep = regime.suspicious_report
+    if decision["sanctions_confirmed"]:
+        return ["Block/hold the transaction immediately", "Notify the compliance / sanctions officer",
+                f"File {rep}: {regime.deadline_note}", "Preserve all related documentation",
+                "Consider law-enforcement referral; do not tip off the subject"]
+    action = decision["recommended_action"]
+    if action == "BLOCK":
+        return ["Hold the transaction pending senior review", f"Prepare the {rep} (draft attached)",
+                "Escalate to the compliance officer", "Do not tip off the subject"]
+    if action == "ESCALATE":
+        return ["Escalate to a senior analyst", f"Review the drafted {rep} narrative", "Request source-of-funds evidence",
+                "Apply enhanced due diligence"]
+    if action == "REVIEW":
+        return ["Assign to a compliance analyst", "Review within 24 hours", "Request additional documentation if needed",
+                "Record the decision and rationale"]
+    return ["No immediate action required", "Continue standard monitoring"]

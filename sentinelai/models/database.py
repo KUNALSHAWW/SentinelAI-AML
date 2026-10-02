@@ -1,30 +1,70 @@
 """
-SentinelAI Database Models
+SentinelAI database models
 ==========================
 
-SQLAlchemy models for persistent storage of transactions, 
-cases, alerts, and audit trails.
+Portable SQLAlchemy 2.0 models (SQLite for zero-config dev, PostgreSQL in
+production - no dialect-specific column types). Enumerations are stored as
+strings and validated in Python, so adding a status never needs a DB enum
+migration.
+
+Tables
+------
+analyses      one row per analysis, with the full explainable response
+alerts        alerts raised by an analysis, triageable by analysts
+cases         investigation cases (state machine enforced in the service layer)
+case_comments analyst notes and system events
+audit_log     tamper-evident, hash-chained trail of every state change
+graph_edges   persisted money-flow edges - the graph accumulates across analyses
 """
 
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-from enum import Enum
+from __future__ import annotations
+
 import uuid
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime, 
-    Text, JSON, ForeignKey, Index, Enum as SQLEnum, Table
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+    Uuid,
 )
-from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from sentinelai.core.time import utcnow
+
+
+class UTCDateTime(TypeDecorator):
+    """Stores UTC; always returns timezone-aware datetimes (SQLite drops tzinfo)."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 class Base(DeclarativeBase):
-    """Base class for all models"""
     pass
 
 
-# Enums
 class RiskLevel(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
@@ -54,6 +94,13 @@ class AlertType(str, Enum):
     ML_DETECTED = "ML_DETECTED"
 
 
+class AlertStatus(str, Enum):
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    ESCALATED = "ESCALATED"
+
+
 class TransactionType(str, Enum):
     WIRE_TRANSFER = "WIRE_TRANSFER"
     ACH = "ACH"
@@ -62,355 +109,127 @@ class TransactionType(str, Enum):
     CHECK = "CHECK"
     CARD = "CARD"
     TRADE_FINANCE = "TRADE_FINANCE"
+    UPI = "UPI"
+    NEFT_RTGS = "NEFT_RTGS"
 
 
-# Association Tables
-case_alerts = Table(
-    "case_alerts",
-    Base.metadata,
-    Column("case_id", UUID(as_uuid=True), ForeignKey("cases.id"), primary_key=True),
-    Column("alert_id", UUID(as_uuid=True), ForeignKey("alerts.id"), primary_key=True),
-)
+class Analysis(Base):
+    __tablename__ = "analyses"
 
-
-class Customer(Base):
-    """Customer/Entity model"""
-    __tablename__ = "customers"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    
-    # Basic Info
-    name: Mapped[str] = mapped_column(String(500), nullable=False)
-    customer_type: Mapped[str] = mapped_column(String(50))  # INDIVIDUAL, CORPORATE, FINANCIAL_INSTITUTION
-    
-    # Risk Profile
-    risk_rating: Mapped[str] = mapped_column(SQLEnum(RiskLevel), default=RiskLevel.LOW)
-    risk_score: Mapped[int] = mapped_column(Integer, default=0)
-    
-    # KYC Status
-    kyc_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    kyc_verification_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    pep_status: Mapped[bool] = mapped_column(Boolean, default=False)
-    sanctions_checked: Mapped[bool] = mapped_column(Boolean, default=False)
-    last_sanctions_check: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Geographic Info
-    country_of_residence: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    nationality: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    jurisdictions: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    
-    # Account Info
-    account_opened_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    account_status: Mapped[str] = mapped_column(String(50), default="ACTIVE")
-    
-    # Extra Data
-    extra_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    transactions_as_sender = relationship("Transaction", back_populates="sender", foreign_keys="Transaction.sender_id")
-    transactions_as_receiver = relationship("Transaction", back_populates="receiver", foreign_keys="Transaction.receiver_id")
-    
-    __table_args__ = (
-        Index("ix_customers_risk_rating", "risk_rating"),
-        Index("ix_customers_country", "country_of_residence"),
-    )
-
-
-class Transaction(Base):
-    """Transaction model"""
-    __tablename__ = "transactions"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    
-    # Transaction Details
-    transaction_type: Mapped[str] = mapped_column(SQLEnum(TransactionType))
-    amount: Mapped[float] = mapped_column(Float, nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="USD")
-    amount_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Normalized
-    
-    # Parties
-    sender_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
-    receiver_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
-    sender = relationship("Customer", back_populates="transactions_as_sender", foreign_keys=[sender_id])
-    receiver = relationship("Customer", back_populates="transactions_as_receiver", foreign_keys=[receiver_id])
-    
-    # Geographic Info
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    request_hash: Mapped[str] = mapped_column(String(64), index=True)
+    customer_id: Mapped[str] = mapped_column(String(200), index=True)
+    customer_name: Mapped[str] = mapped_column(String(500))
+    amount: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(8))
+    amount_usd: Mapped[float] = mapped_column(Float)
+    transaction_type: Mapped[str] = mapped_column(String(32))
     origin_country: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
     destination_country: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    intermediate_countries: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    
-    # Crypto-specific
-    is_crypto: Mapped[bool] = mapped_column(Boolean, default=False)
-    crypto_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    
-    # Risk Assessment
-    risk_score: Mapped[int] = mapped_column(Integer, default=0)
-    risk_level: Mapped[str] = mapped_column(SQLEnum(RiskLevel), default=RiskLevel.LOW)
-    is_suspicious: Mapped[bool] = mapped_column(Boolean, default=False)
-    
-    # Processing Status
-    processed: Mapped[bool] = mapped_column(Boolean, default=False)
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Documents & Evidence
-    documents: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    
-    # Timestamps
-    transaction_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    # Metadata
-    raw_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    
-    # Relationships
-    alerts = relationship("Alert", back_populates="transaction")
-    
-    __table_args__ = (
-        Index("ix_transactions_date", "transaction_date"),
-        Index("ix_transactions_risk", "risk_level", "risk_score"),
-        Index("ix_transactions_suspicious", "is_suspicious"),
+    regime: Mapped[str] = mapped_column(String(16))
+    mode: Mapped[str] = mapped_column(String(16))
+    risk_score: Mapped[int] = mapped_column(Integer, index=True)
+    risk_level: Mapped[str] = mapped_column(String(16), index=True)
+    recommended_action: Mapped[str] = mapped_column(String(32))
+    report_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    response: Mapped[Dict[str, Any]] = mapped_column(JSON)
+
+    alerts: Mapped[List["Alert"]] = relationship(back_populates="analysis", cascade="all, delete-orphan")
+
+    __table_args__ = (Index("ix_analyses_level_score", "risk_level", "risk_score"),)
+
+
+class Case(Base):
+    __tablename__ = "cases"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    case_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default=CaseStatus.OPEN.value, index=True)
+    priority: Mapped[str] = mapped_column(String(16), default=RiskLevel.MEDIUM.value, index=True)
+    assigned_to: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    analysis_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("analyses.id"), nullable=True)
+    investigation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    report: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    sar_filed: Mapped[bool] = mapped_column(Boolean, default=False)
+    sar_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    sar_filed_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+    review_deadline: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+    report_deadline: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+
+    alerts: Mapped[List["Alert"]] = relationship(back_populates="case")
+    comments: Mapped[List["CaseComment"]] = relationship(
+        back_populates="case", cascade="all, delete-orphan", order_by="CaseComment.created_at"
     )
 
 
 class Alert(Base):
-    """Alert/Flag model"""
     __tablename__ = "alerts"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Alert Details
-    alert_type: Mapped[str] = mapped_column(SQLEnum(AlertType))
-    severity: Mapped[str] = mapped_column(SQLEnum(RiskLevel))
-    title: Mapped[str] = mapped_column(String(500), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=True)
-    
-    # Source
-    transaction_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("transactions.id"), nullable=True)
-    transaction = relationship("Transaction", back_populates="alerts")
-    
-    # Status
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
-    acknowledged_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Analysis
-    risk_factors: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    llm_analysis: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    analysis_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("analyses.id"), nullable=True, index=True)
+    case_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=True, index=True)
+    alert_type: Mapped[str] = mapped_column(String(40), index=True)
+    severity: Mapped[str] = mapped_column(String(16))
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    signal_codes: Mapped[List[str]] = mapped_column(JSON, default=list)
     confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    cases = relationship("Case", secondary=case_alerts, back_populates="alerts")
-    
-    __table_args__ = (
-        Index("ix_alerts_type", "alert_type"),
-        Index("ix_alerts_active", "is_active"),
-    )
+    status: Mapped[str] = mapped_column(String(24), default=AlertStatus.OPEN.value, index=True)
+    acknowledged_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
-
-class Case(Base):
-    """Investigation Case model"""
-    __tablename__ = "cases"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    case_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    
-    # Case Details
-    title: Mapped[str] = mapped_column(String(500), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(SQLEnum(CaseStatus), default=CaseStatus.OPEN)
-    priority: Mapped[str] = mapped_column(SQLEnum(RiskLevel), default=RiskLevel.MEDIUM)
-    
-    # Assignment
-    assigned_to: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    team: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    
-    # Investigation
-    investigation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    decision_path: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    evidence: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    
-    # LLM Analysis
-    ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_risk_assessment: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    
-    # SAR Details (if applicable)
-    sar_filed: Mapped[bool] = mapped_column(Boolean, default=False)
-    sar_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    sar_filed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Deadlines
-    review_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    sar_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Relationships
-    alerts = relationship("Alert", secondary=case_alerts, back_populates="cases")
-    comments = relationship("CaseComment", back_populates="case", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="case", cascade="all, delete-orphan")
-    
-    __table_args__ = (
-        Index("ix_cases_status", "status"),
-        Index("ix_cases_priority", "priority"),
-        Index("ix_cases_assigned", "assigned_to"),
-    )
+    analysis: Mapped[Optional[Analysis]] = relationship(back_populates="alerts")
+    case: Mapped[Optional[Case]] = relationship(back_populates="alerts")
 
 
 class CaseComment(Base):
-    """Case comments/notes"""
     __tablename__ = "case_comments"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    case_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("cases.id"), nullable=False)
-    
-    author: Mapped[str] = mapped_column(String(100), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    comment_type: Mapped[str] = mapped_column(String(50), default="NOTE")  # NOTE, DECISION, ESCALATION
-    
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    case = relationship("Case", back_populates="comments")
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    case_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("cases.id"), index=True)
+    author: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    comment_type: Mapped[str] = mapped_column(String(32), default="NOTE")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    case: Mapped[Case] = relationship(back_populates="comments")
 
 
 class AuditLog(Base):
-    """Audit trail for compliance"""
-    __tablename__ = "audit_logs"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Action Details
-    action: Mapped[str] = mapped_column(String(100), nullable=False)
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    
-    # Context
-    user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    
-    # Changes
-    old_values: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    new_values: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    
-    # Case Reference
-    case_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("cases.id"), nullable=True)
-    case = relationship("Case", back_populates="audit_logs")
-    
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    __table_args__ = (
-        Index("ix_audit_entity", "entity_type", "entity_id"),
-        Index("ix_audit_action", "action"),
-        Index("ix_audit_date", "created_at"),
-    )
+    """Append-only, hash-chained audit trail (see services.audit)."""
+
+    __tablename__ = "audit_log"
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    timestamp: Mapped[str] = mapped_column(String(40))          # ISO-8601 text: hashed verbatim
+    actor: Mapped[str] = mapped_column(String(100))
+    action: Mapped[str] = mapped_column(String(100), index=True)
+    entity_type: Mapped[str] = mapped_column(String(50))
+    entity_id: Mapped[str] = mapped_column(String(100))
+    payload: Mapped[str] = mapped_column(Text)                  # canonical JSON text: hashed verbatim
+    prev_hash: Mapped[str] = mapped_column(String(64))
+    hash: Mapped[str] = mapped_column(String(64), unique=True)
+
+    __table_args__ = (Index("ix_audit_entity", "entity_type", "entity_id"),)
 
 
-class SanctionsList(Base):
-    """Sanctions list entries"""
-    __tablename__ = "sanctions_list"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Entity Info
-    name: Mapped[str] = mapped_column(String(500), nullable=False)
-    aliases: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    entity_type: Mapped[str] = mapped_column(String(50))  # INDIVIDUAL, ORGANIZATION, VESSEL
-    
-    # Sanctions Info
-    list_source: Mapped[str] = mapped_column(String(100))  # OFAC, EU, UN, etc.
-    list_type: Mapped[str] = mapped_column(String(100))  # SDN, CONSOLIDATED, etc.
-    program: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    
-    # Identifiers
-    id_numbers: Mapped[Optional[Dict[str, str]]] = mapped_column(JSONB, nullable=True)
-    
-    # Status
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    added_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    removed_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Metadata
-    raw_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    __table_args__ = (
-        Index("ix_sanctions_name", "name"),
-        Index("ix_sanctions_source", "list_source"),
-    )
+class GraphEdge(Base):
+    __tablename__ = "graph_edges"
 
-
-class PEPList(Base):
-    """Politically Exposed Persons list"""
-    __tablename__ = "pep_list"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Person Info
-    name: Mapped[str] = mapped_column(String(500), nullable=False)
-    aliases: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    nationality: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    
-    # PEP Details
-    pep_type: Mapped[str] = mapped_column(String(100))  # HEAD_OF_STATE, MINISTER, etc.
-    position: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    organization: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    country: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    
-    # Status
-    is_current: Mapped[bool] = mapped_column(Boolean, default=True)
-    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Risk Level
-    risk_level: Mapped[str] = mapped_column(SQLEnum(RiskLevel), default=RiskLevel.HIGH)
-    
-    # Metadata
-    source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    raw_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    __table_args__ = (
-        Index("ix_pep_name", "name"),
-        Index("ix_pep_country", "country"),
-    )
-
-
-class RuleConfiguration(Base):
-    """Configurable detection rules"""
-    __tablename__ = "rule_configurations"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Rule Info
-    rule_id: Mapped[str] = mapped_column(String(100), unique=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[str] = mapped_column(String(100))  # STRUCTURING, VELOCITY, GEO, etc.
-    
-    # Rule Definition
-    rule_type: Mapped[str] = mapped_column(String(50))  # THRESHOLD, PATTERN, ML
-    parameters: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    
-    # Scoring
-    base_risk_score: Mapped[int] = mapped_column(Integer, default=10)
-    severity: Mapped[str] = mapped_column(SQLEnum(RiskLevel), default=RiskLevel.MEDIUM)
-    
-    # Status
-    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    
-    # Metadata
-    created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(300), index=True)
+    target: Mapped[str] = mapped_column(String(300), index=True)
+    amount_usd: Mapped[float] = mapped_column(Float)
+    timestamp: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    analysis_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    ref: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    edge_key: Mapped[str] = mapped_column(String(400), unique=True)

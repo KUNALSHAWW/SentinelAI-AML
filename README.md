@@ -1,430 +1,130 @@
-# 🛡️ SentinelAI - Enterprise AML Detection Platform
+# 🛡️ SentinelAI - explainable AML intelligence
 
-<div align="center">
+[![CI](https://github.com/KUNALSHAWW/SentinelAI-AML/actions/workflows/ci.yml/badge.svg)](https://github.com/KUNALSHAWW/SentinelAI-AML/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%20|%203.12-blue)
+![License](https://img.shields.io/badge/license-MIT-yellow)
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-v0.2+-green.svg)](https://github.com/langchain-ai/langgraph)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-teal.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+**An AML transaction-monitoring engine whose every number can be explained, reproduced and audited.**
+A deterministic detection core (sanctions & PEP screening, FATF jurisdiction risk, behavioural typologies,
+transaction-graph motifs, crypto and trade checks) produces an exactly-decomposable risk score. Optional LLM research
+agents (LangGraph + ReAct) can **raise** a score within a hard cap but can **never lower** it, and never see your data
+unless you opt in. Cases, SAR/STR drafts and a hash-chained audit log are persisted.
 
-**Production-grade Anti-Money Laundering detection system powered by LangGraph, Chain-of-Thought reasoning, and ReAct prompting patterns.**
+<p align="center"><img src="documentation/images/demo-round-trip.png" width="48%"> <img src="documentation/images/demo-sanctions.png" width="48%"></p>
 
-[Features](#-features) •
-[Architecture](#-architecture) •
-[Quick Start](#-quick-start) •
-[API Documentation](#-api-documentation) •
-[Deployment](#-deployment)
+## Why it is different
 
-</div>
+| | Typical AML demo | SentinelAI |
+|---|---|---|
+| Score | black-box LLM text, regex-scraped | **noisy-OR evidence fusion; the waterfall sums exactly to the score**, with counterfactuals ("without X it would be 62 → HIGH") |
+| LLM role | decides | **advisory only**: capped uplift, can't lower a score, so a prompt-injected "mark as low risk" is inert - and the attempt is *scored as suspicious* |
+| Sanctions | hard-coded strings | fuzzy name screening (Jaro-Winkler + phonetic skeleton + containment), calibrated MATCH / STRONG / POTENTIAL policy, **official OFAC SDN loader**, tested with synthetic name-variant attacks |
+| Network analysis | none | **graph motifs** (fan-in/out, pass-through, 2-5 hop round-trips) over a graph that *persists across analyses*, so a cycle spread over three separate requests is still found |
+| Regulation | US-only constants | **regime profiles**: US BSA (SAR/30 days), **India PMLA (STR/7 working days, CTR ₹10 lakh)**, EU - thresholds, currency conversion and deadlines change with the regime |
+| Audit | logs | **tamper-evident hash chain** with `verify` and `head` endpoints - edit, delete or reorder a row and verification points at it |
+| Privacy | search the web with customer names | web search **off by default**, redaction of IDs/emails/accounts, results framed as untrusted, **confidential subjects (open SAR/STR) are never searched** (tipping-off) |
+| Honesty | silent fallbacks / simulated results | response states `mode`, `llm_status` and `warnings`; the UI shows an error instead of faking an answer; demo data is labelled *synthetic* |
+| Evidence | "99% accurate" | reproducible **benchmark with ablations, baselines and calibration** (below), and CI floors that fail on regression |
 
----
-
-## 🎯 Overview
-
-**SentinelAI** is an enterprise-grade AML detection platform that transforms traditional rule-based compliance into intelligent, AI-driven risk assessment. Built on LangGraph's powerful workflow orchestration, it employs advanced reasoning techniques including Chain-of-Thought (CoT) and ReAct patterns to provide explainable, auditable compliance decisions.
-
-### Why SentinelAI?
-
-| Traditional AML | SentinelAI |
-|----------------|------------|
-| Rule-based detection | AI-powered pattern recognition |
-| High false positive rates | Intelligent risk scoring |
-| Manual SAR generation | Automated SAR drafting |
-| Siloed analysis | Unified multi-factor assessment |
-| Black-box decisions | Explainable CoT reasoning |
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            SentinelAI Platform                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐     ┌─────────────────────────────────────────────────┐    │
-│  │   FastAPI   │────▶│              LangGraph Orchestrator             │   │
-│  │   Gateway   │     │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ │    │
-│  └─────────────┘     │  │ CoT     │ │ ReAct   │ │ Multi   │ │ State  │ │    │
-│         │            │  │ Prompts │ │ Agents  │ │ Agent   │ │ Graph  │ │    │
-│         ▼            │  └─────────┘ └─────────┘ └─────────┘ └────────┘ │    │
-│  ┌─────────────┐     └─────────────────────────────────────────────────┘    │
-│  │   Redis     │                           │                                │
-│  │   Cache     │◀──────────────────────────┘                               │
-│  └─────────────┘                           │                                │
-│         │            ┌─────────────────────▼────────────────────────┐       │
-│         ▼            │              Specialized Agents               │      │
-│  ┌─────────────┐     │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │       │
-│  │ PostgreSQL  │     │  │Transaction│ │   PEP    │ │  Sanctions   │  │      │
-│  │  Database   │◀────│  │ Analysis  │ │Screening │ │  Screening   │  │      │
-│  └─────────────┘     │  └──────────┘ └──────────┘ └──────────────┘  │       │
-│                      │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │       │
-│  ┌─────────────┐     │  │ Network  │ │Behavioral│ │   Crypto     │  │       │
-│  │ Prometheus  │     │  │ Analysis │ │ Analysis │ │ Risk Agent   │  │       │
-│  │  + Grafana  │     │  └──────────┘ └──────────┘ └──────────────┘  │       │
-│  └─────────────┘     └──────────────────────────────────────────────┘       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Core Components
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **API Gateway** | FastAPI | REST API with OpenAPI docs, rate limiting |
-| **Orchestrator** | LangGraph | Workflow coordination, state management |
-| **Agents** | Groq LLM (Llama3-70B) | Specialized analysis with CoT/ReAct |
-| **Database** | PostgreSQL | Transaction, case, and audit storage |
-| **Cache** | Redis | LLM response caching, session management |
-| **Monitoring** | Prometheus + Grafana | Metrics, alerting, dashboards |
-
----
-
-## ✨ Features
-
-### 🔍 Intelligent Analysis Agents
-
-- **Transaction Analysis Agent** - Deep pattern analysis with Chain-of-Thought reasoning
-- **PEP Screening Agent** - Politically Exposed Persons identification with fuzzy matching
-- **Sanctions Agent** - Real-time screening against OFAC, EU, UN lists
-- **Network Analysis Agent** - Entity relationship and shell company detection
-- **Behavioral Analysis Agent** - Anomaly detection and velocity checks
-- **Crypto Risk Agent** - Mixer detection, darknet association, cross-chain analysis
-- **Geographic Risk Agent** - Jurisdiction risk scoring and tax haven detection
-- **Document Analysis Agent** - Trade document verification and fraud detection
-
-### 🧠 Advanced AI Capabilities
-
-- **Chain-of-Thought (CoT) Prompting** - Step-by-step reasoning for explainable decisions
-- **ReAct Pattern** - Reason-Act-Observe loops for complex investigations
-- **Multi-Agent Orchestration** - Parallel and conditional agent execution
-- **Context-Aware Analysis** - Historical pattern consideration
-- **Explainable AI** - Full reasoning trace for audit compliance
-
-### 📊 Enterprise Features
-
-- **RESTful API** - Full CRUD operations with OpenAPI documentation
-- **Batch Processing** - Analyze thousands of transactions efficiently
-- **Case Management** - End-to-end investigation workflow
-- **SAR Generation** - Automated Suspicious Activity Report drafting
-- **Audit Trail** - Complete action logging for compliance
-- **Real-time Alerts** - Configurable risk-based notifications
-- **Docker Deployment** - Production-ready containerization
-- **Prometheus Metrics** - Comprehensive observability
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- PostgreSQL 15+
-- Redis 7+
-- Docker & Docker Compose (optional)
-- Groq API Key
-
-### Option 1: Docker Compose (Recommended)
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/KUNALSHAWW/SentinelAI-AML.git
-cd SentinelAI-AML
-
-# Create environment file
-cp .env.example .env
-# Edit .env with your GROQ_API_KEY
-
-# Start all services
-docker-compose up -d
-
-# Check health
-curl http://localhost:8000/health
-```
-
-### Option 2: Local Development
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -e ".[dev]"
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Initialize database
-python -c "from sentinelai.models.database import init_db; import asyncio; asyncio.run(init_db())"
-
-# Start the server
-sentinelai serve --reload
+sentinelai serve                 # http://localhost:8000  (UI at /, OpenAPI at /docs)
+sentinelai analyze --no-llm      # run the 13 bundled scenarios in the terminal
+sentinelai screen "Kareem Al Dazhary" --country LB
+sentinelai evaluate --n 3000     # regenerate the benchmark
+pytest                           # 200+ tests
 ```
-
-### Option 3: Using Makefile
+No API key, database server or internet is needed: SQLite, the deterministic engine and a synthetic demo sanctions list
+work out of the box. Add `GROQ_API_KEY` for AI research; run `sentinelai sanctions update` for the real OFAC list.
 
 ```bash
-# Install dependencies
-make install
-
-# Run development server
-make dev
-
-# Run tests
-make test
-
-# Build Docker images
-make docker-build
+docker compose up -d                              # API + PostgreSQL + Redis
+docker compose --profile monitoring up -d         # + Prometheus + Grafana (provisioned dashboard)
 ```
 
----
-
-## 📡 API Documentation
-
-### Endpoints Overview
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/analyze` | Analyze a single transaction |
-| `POST` | `/api/v1/batch` | Batch analyze multiple transactions |
-| `GET` | `/api/v1/analysis/{id}` | Get analysis results |
-| `POST` | `/api/v1/cases` | Create investigation case |
-| `GET` | `/api/v1/cases/{id}` | Get case details |
-| `PATCH` | `/api/v1/cases/{id}` | Update case status |
-| `GET` | `/api/v1/alerts` | List alerts with filtering |
-| `GET` | `/health` | Health check |
-| `GET` | `/metrics` | Prometheus metrics |
-
-### Example: Analyze Transaction
-
+### Example
 ```bash
-curl -X POST http://localhost:8000/api/v1/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction": {
-      "amount": 500000,
-      "currency": "USD",
-      "transaction_type": "WIRE_TRANSFER",
-      "origin_country": "RU",
-      "destination_country": "KY",
-      "parties": ["moscow_trading_llc", "cayman_holdings"]
-    },
-    "customer": {
-      "name": "Moscow Trading LLC",
-      "customer_type": "CORPORATE",
-      "account_age_days": 30
-    }
-  }'
+curl -s localhost:8000/api/v1/analyze -H 'content-type: application/json' -d '{
+  "transaction": {"amount": 500000, "origin_country": "RU", "destination_country": "KY",
+                  "intermediate_countries": ["AE","CH"], "parties": ["Cayman Holdings Limited"]},
+  "customer": {"name": "Moscow Trading LLC", "customer_type": "CORPORATE", "account_age_days": 45},
+  "enable_llm_analysis": false }' | jq '.risk_assessment.risk_score, .recommended_action, .explanation.contributions[:3]'
 ```
-
-### Example Response
-
-```json
-{
-  "analysis_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "overall_risk_score": 87.5,
-  "risk_level": "CRITICAL",
-  "decision": "BLOCK",
-  "requires_sar": true,
-  "reasoning": {
-    "chain_of_thought": [
-      "1. Transaction involves high-risk jurisdiction (Russia)",
-      "2. Destination is known tax haven (Cayman Islands)",
-      "3. New account with no transaction history",
-      "4. Large amount ($500,000) exceeds normal thresholds",
-      "5. Combined risk factors indicate potential layering"
-    ],
-    "conclusion": "High probability of money laundering activity"
-  },
-  "agent_results": {
-    "transaction_analysis": { "score": 85, "flags": ["high_value", "new_account"] },
-    "geo_risk": { "score": 95, "flags": ["sanctioned_origin", "tax_haven_dest"] },
-    "sanctions": { "score": 75, "flags": ["potential_evasion"] }
-  },
-  "alerts": [
-    { "type": "HIGH_RISK_JURISDICTION", "severity": "HIGH" },
-    { "type": "TAX_HAVEN_TRANSFER", "severity": "MEDIUM" }
-  ]
-}
 ```
-
-### Interactive Documentation
-
-Once the server is running, access:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
----
-
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GROQ_API_KEY` | Groq API key for LLM access | Required |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://...` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `API_HOST` | API server host | `0.0.0.0` |
-| `API_PORT` | API server port | `8000` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `RISK_THRESHOLD_HIGH` | High risk threshold | `70` |
-| `RISK_THRESHOLD_CRITICAL` | Critical risk threshold | `85` |
-| `ENABLE_CACHE` | Enable LLM response caching | `true` |
-| `CACHE_TTL` | Cache time-to-live (seconds) | `3600` |
-
-### Risk Configuration
-
-```python
-# sentinelai/core/config.py
-
-HIGH_RISK_COUNTRIES = ["AF", "IR", "KP", "RU", "SY", "YE", ...]
-TAX_HAVENS = ["KY", "VG", "PA", "CH", "LU", "MT", ...]
-SANCTIONED_ENTITIES = ["sdgt_list", "ofac_sdn", ...]
+74
+"ESCALATE"
+[ {"points": 21, "description": "Origin country Russia (RU) has significant sanctions-programme exposure"},
+  {"points": 20, "description": "Young corporate account paying a secrecy jurisdiction with no supporting documents"},
+  {"points": 12, "description": "Very large transaction (USD 500,000)"} ]
 ```
+The response also carries typologies (with FATF/FinCEN references), screening evidence, the transaction graph, alerts,
+a SAR/STR draft when filing is warranted, a persisted case, and the audit-chain entry.
 
----
+## Architecture
 
-## 🐳 Deployment
-
-### Docker Compose Production
-
-```yaml
-# docker-compose.yml includes:
-# - SentinelAI API (3 replicas)
-# - PostgreSQL 15 with persistence
-# - Redis 7 with persistence
-# - Prometheus monitoring
-# - Grafana dashboards
+```mermaid
+flowchart LR
+  C[Client / UI] -->|X-API-Key, SSE| API[FastAPI<br/>RBAC · rate limit · metrics]
+  API --> G{{LangGraph pipeline}}
+  G --> S[screen<br/>deterministic engine]
+  S -->|research requested,<br/>LLM configured,<br/>not conclusive| R[research<br/>guarded ReAct agents]
+  S --> SC[score]
+  R --> SC
+  SC --> SY[synthesize<br/>briefing]
+  SY -->|filing warranted| RP[SAR/STR draft]
+  S -.-> E[(Sanctions · PEP · Jurisdictions<br/>Behaviour · Graph · Crypto · Trade)]
+  API --> DB[(SQLite / PostgreSQL<br/>analyses · cases · alerts · graph · audit)]
+  API -.-> RD[(Redis<br/>optional)]
 ```
+Details and design decisions: [`documentation/ARCHITECTURE.md`](documentation/ARCHITECTURE.md).
 
-```bash
-# Production deployment
-docker-compose -f docker-compose.yml up -d
+## Benchmark (synthetic, reproducible)
 
-# Scale API servers
-docker-compose up -d --scale api=5
+`sentinelai evaluate --n 3000 --seed 7` - 20 % injected suspicious cases (45 % of them deliberately *stealth*), ~55 % of
+benign traffic are hard negatives (cash businesses, funded start-ups, new crypto users, documented offshore trade...).
 
-# View logs
-docker-compose logs -f api
-```
+| Method | Operating point | Precision | Recall | False-positive rate | ROC-AUC |
+|---|---|---|---|---|---|
+| Naive rules (≥ $10k or risky country) | fixed | 27.8 % | 86.8 % | **56.4 %** | 0.652 |
+| **SentinelAI** | review (score ≥ 30) | 64.8 % | 99.2 % | 13.5 % | **0.963** (CI 0.956-0.969) |
+| **SentinelAI** | escalate (score ≥ 60) | 79.2 % | 66.2 % | **4.3 %** | 0.963 |
 
-### Health Monitoring
+Per-detector ablation, per-typology recall, calibration and the sanctions name-variant test are in
+[`documentation/BENCHMARK.md`](documentation/BENCHMARK.md). **Honest caveats:** the data is synthetic and written by the
+same author as the engine, so absolute numbers are optimistic; noisy-OR fusion is *comparable* to the old additive scoring on
+accuracy - its benefit is saturation and exact explainability; weak-signal typologies (PEP-by-role, single-flag layering) have
+modest recall by design. The value is relative evidence, regression protection and a method others can attack.
 
-```bash
-# Check all services
-curl http://localhost:8000/health
+## Security & privacy
+API-key RBAC (fail-closed in production), non-bypassable rate limiting, public-demo mode that persists nothing, redaction,
+opt-in guarded web search, prompt-injection sanitisation + detection, hash-chained audit trail. Threat model: [`SECURITY.md`](SECURITY.md).
 
-# Prometheus metrics
-curl http://localhost:8000/metrics
+## Configuration
+Everything is optional - see [`.env.example`](.env.example). Highlights: `SENTINEL_RISK_REGIME` (`US_BSA`/`IN_PMLA`/`EU_AMLD`),
+`SENTINEL_LLM_MAX_UPLIFT`, `SENTINEL_LLM_WEB_SEARCH_ENABLED`, `SENTINEL_API_KEYS`, `DATABASE_URL`, `REDIS_URL`.
+Deployment: [`SETUP.md`](SETUP.md), [`DEPLOY_RENDER.md`](DEPLOY_RENDER.md).
 
-# Grafana dashboard
-open http://localhost:3000
-```
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-make test
-
-# Run with coverage
-pytest --cov=sentinelai --cov-report=html
-
-# Run specific test file
-pytest tests/test_agents.py -v
-
-# Run integration tests
-pytest tests/test_api.py -v
-```
-
----
-
-## 📁 Project Structure
-
+## Repository layout
 ```
 sentinelai/
-├── __init__.py              # Package initialization
-├── cli.py                   # Command-line interface
-├── core/
-│   ├── config.py            # Configuration management
-│   └── logging.py           # Structured logging
-├── models/
-│   ├── database.py          # SQLAlchemy ORM models
-│   └── schemas.py           # Pydantic schemas
-├── agents/
-│   ├── prompts.py           # CoT/ReAct prompt templates
-│   ├── base.py              # Base agent class
-│   ├── specialized.py       # Domain-specific agents
-│   └── orchestrator.py      # LangGraph orchestration
-├── services/
-│   ├── analysis.py          # Analysis service
-│   └── case_management.py   # Case management service
-├── api/
-│   ├── app.py               # FastAPI application
-│   └── routes.py            # API endpoints
-└── tests/
-    ├── conftest.py          # Test fixtures
-    ├── test_agents.py       # Agent tests
-    └── test_api.py          # API tests
+  engine/        deterministic core: names, sanctions, pep, geo, behavioral, graph, crypto, trade, scoring, pipeline
+  agents/        LangGraph orchestrator, ReAct agents, structured findings, privacy gate, prompts
+  services/      analysis, case management, audit chain, SAR/STR reporting, scenarios
+  api/           FastAPI app, routers, middleware     core/  config, logging, security, regimes, jurisdictions, metrics
+  db/ models/    persistence                          evaluation/  synthetic generator, metrics, ablations, report
+  data/          jurisdictions (FATF Jun 2026), synthetic sanctions/PEP lists, demo scenarios
+frontend/ docs/  UI (docs/ is generated from frontend/)   migrations/  Alembic      tests/  ~210 tests
 ```
 
----
+## Roadmap (contributions welcome)
+- Real data adapters: UN/EU consolidated lists, OpenSanctions PEP, SWIFT ISO 20022 / UPI message parsing
+- Identifier-level sanctions matching (DOB, passport, registration numbers) and a reviewed whitelist workflow
+- Learned model as an additional *evidence source* (graph neural net / gradient boosting) behind the same capped-fusion API
+- Streaming ingestion (Kafka) with incremental graph updates; community-detection on the persisted graph
+- Four-eyes approval for SAR filing, SSO/OIDC, key rotation
+- Calibration of noisy-OR weights against labelled data; conformal risk bounds
 
-## 🔒 Security Considerations
-
-- **API Authentication**: Implement OAuth2/JWT for production
-- **Data Encryption**: All PII encrypted at rest and in transit
-- **Audit Logging**: Complete action trail for compliance
-- **Rate Limiting**: Built-in protection against abuse
-- **Input Validation**: Strict Pydantic schema validation
-
----
-
-## 📈 Roadmap
-
-- [ ] Real-time streaming analysis
-- [ ] GraphQL API support
-- [ ] Kubernetes Helm charts
-- [ ] ML model fine-tuning pipeline
-- [ ] Multi-tenancy support
-- [ ] Regulatory report automation (CTR, STR)
-- [ ] Integration with SWIFT/ISO 20022
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👨‍💻 Author
-
-**Kunal Shaw**
-- GitHub: [@KUNALSHAWW](https://github.com/KUNALSHAWW)
-
----
-
-<div align="center">
-
-**Built with ❤️ for financial compliance**
-
-[Report Bug](https://github.com/KUNALSHAWW/SentinelAI-AML/issues) • [Request Feature](https://github.com/KUNALSHAWW/SentinelAI-AML/issues)
-
-</div>
+## License
+MIT © Kunal Shaw

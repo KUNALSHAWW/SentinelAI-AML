@@ -1,124 +1,110 @@
-"""
-SentinelAI Test Configuration
-=============================
+"""Shared fixtures. Environment is pinned *before* sentinelai is imported."""
 
-Pytest fixtures and configuration.
-"""
+import os
+import tempfile
+from datetime import datetime, timedelta, timezone
 
-import pytest
-from datetime import datetime, timedelta
-from typing import Dict, Any
+for key in ("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY", "TAVILY_API_KEY", "DATABASE_URL", "REDIS_URL"):
+    os.environ.pop(key, None)
+os.environ.update({
+    "SENTINEL_ENVIRONMENT": "development",
+    "SENTINEL_MONITOR_LOG_LEVEL": "WARNING",
+    "SENTINEL_DB_SQLITE_PATH": os.path.join(tempfile.mkdtemp(prefix="sentinel-test-"), "t.db"),
+    "SENTINEL_API_RATE_LIMIT_REQUESTS": "100000",
+})
 
-from sentinelai.core.config import Settings
-from sentinelai.agents.specialized import AMLState
+import pytest  # noqa: E402
 
+from sentinelai.core import cache as cache_module  # noqa: E402
+from sentinelai.core import security  # noqa: E402
+from sentinelai.core.config import settings  # noqa: E402
+from sentinelai.engine import DetectionEngine, build_input  # noqa: E402
 
-@pytest.fixture
-def sample_transaction() -> Dict[str, Any]:
-    """Sample transaction for testing"""
-    return {
-        "amount": 9500,
-        "currency": "USD",
-        "transaction_type": "WIRE_TRANSFER",
-        "origin_country": "US",
-        "destination_country": "CA",
-        "parties": ["retail_chain_inc"],
-        "timestamp": datetime.utcnow(),
-        "documents": ["Invoice #SMF-4587"],
-    }
+NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture
-def sample_customer() -> Dict[str, Any]:
-    """Sample customer for testing"""
-    return {
-        "name": "James Smith",
-        "customer_type": "INDIVIDUAL",
-        "account_age_days": 120,
-        "country_of_residence": "US",
-        "transaction_history": [
-            {
-                "amount": 9200,
-                "timestamp": datetime.utcnow() - timedelta(hours=2),
-            },
-            {
-                "amount": 9350,
-                "timestamp": datetime.utcnow() - timedelta(hours=4),
-            },
-        ],
-    }
+def ts(hours_ago: float) -> str:
+    return (NOW - timedelta(hours=hours_ago)).isoformat()
 
 
 @pytest.fixture
-def high_risk_transaction() -> Dict[str, Any]:
-    """High-risk transaction for testing"""
-    return {
-        "amount": 500000,
-        "currency": "USD",
-        "transaction_type": "WIRE_TRANSFER",
-        "origin_country": "IR",  # Iran - high risk
-        "destination_country": "DE",
-        "parties": ["tehran_exporters"],
-        "timestamp": datetime.utcnow(),
-        "documents": ["Trade Agreement #IR-789"],
-    }
+def engine() -> DetectionEngine:
+    return DetectionEngine()
 
 
 @pytest.fixture
-def pep_customer() -> Dict[str, Any]:
-    """PEP customer for testing"""
-    return {
-        "name": "Minister Adebayo Gov",
-        "customer_type": "INDIVIDUAL",
-        "account_age_days": 10,
-        "country_of_residence": "NG",
-        "transaction_history": [],
-    }
+def make_ctx():
+    def _make(tx=None, customer=None, network=None, regime="US_BSA", **kw):
+        transaction = {"amount": 5000, "currency": "USD", "transaction_type": "WIRE_TRANSFER", "origin_country": "US",
+                       "destination_country": "CA", "parties": ["Acme Supplies"], "documents": ["Invoice"], "timestamp": NOW.isoformat()}
+        transaction.update(tx or {})
+        cust = {"name": "Jane Roe", "customer_id": "c1", "customer_type": "INDIVIDUAL", "account_age_days": 800}
+        cust.update(customer or {})
+        return build_input(transaction, cust, network, regime=regime, **kw)
+    return _make
 
 
 @pytest.fixture
-def crypto_transaction() -> Dict[str, Any]:
-    """Crypto transaction for testing"""
-    return {
-        "amount": 150000,
-        "currency": "USD",
-        "transaction_type": "CRYPTO",
-        "asset_type": "CRYPTO",
-        "timestamp": datetime.utcnow(),
-        "crypto_details": {
-            "wallet_age_days": 3,
-            "mixer_used": True,
-            "cross_chain_swaps": 4,
-        },
-    }
+def run(engine, make_ctx):
+    def _run(**kw):
+        return engine.run(make_ctx(**kw))
+    return _run
 
 
 @pytest.fixture
-def sanctions_transaction() -> Dict[str, Any]:
-    """Transaction with sanctioned entity"""
-    return {
-        "amount": 2000000,
-        "currency": "USD",
-        "transaction_type": "WIRE_TRANSFER",
-        "origin_country": "RU",
-        "destination_country": "IN",
-        "parties": ["sanctioned_russian_bank", "intermediary_ae"],
-        "intermediate_countries": ["AE", "TR"],
-        "timestamp": datetime.utcnow(),
-        "documents": [],
-    }
+async def db(tmp_path):
+    """Fresh on-disk SQLite per test (in-memory + StaticPool cannot model concurrent sessions)."""
+    from sentinelai.db import session as dbs
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    await dbs.init_db()
+    yield dbs
+    await dbs.dispose_engine()
 
 
 @pytest.fixture
-def initial_state(sample_transaction, sample_customer) -> AMLState:
-    """Initial AML state for testing"""
-    return AMLState.create_initial(sample_transaction, sample_customer)
+def client(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from sentinelai.api import deps
+    from sentinelai.api.app import create_app
+    from sentinelai.db import session as dbs
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    deps.reset_services()
+    cache_module.reset_cache()
+    with TestClient(create_app()) as c:
+        yield c
 
 
 @pytest.fixture
-def test_settings() -> Settings:
-    """Test settings configuration"""
-    return Settings(
-        environment="development",
-        llm={"provider": "groq"},
-    )
+def client_soft(tmp_path):
+    """Like `client`, but server errors become HTTP 500 responses instead of re-raising (tests error handlers)."""
+    from fastapi.testclient import TestClient
+
+    from sentinelai.api import deps
+    from sentinelai.api.app import create_app
+    from sentinelai.db import session as dbs
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    deps.reset_services()
+    with TestClient(create_app(), raise_server_exceptions=False) as c:
+        yield c
+
+
+@pytest.fixture
+def auth_env(monkeypatch):
+    """Switch the app into API-key mode (production-like auth)."""
+    def _apply(keys="alice:admin:adminkey,bob:analyst:analystkey,eve:viewer:viewerkey", **extra):
+        monkeypatch.setattr(settings.api, "api_keys", keys)
+        for k, v in extra.items():
+            monkeypatch.setattr(settings.api if hasattr(settings.api, k) else settings, k, v)
+        security.get_keystore(reload=True)
+    yield _apply
+    monkeypatch.undo()
+    security.get_keystore(reload=True)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache_and_services():
+    """Global caches must never leak between tests (a cached agent result once hid a failure path)."""
+    cache_module.reset_cache()
+    yield
+    cache_module.reset_cache()
