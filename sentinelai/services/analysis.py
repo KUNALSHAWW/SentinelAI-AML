@@ -158,7 +158,9 @@ class AnalysisService:
                 await session.flush()
                 if decision["report_required"]:
                     regime = get_regime(ctx.regime)
-                    priority = "MEDIUM" if score.level == "LOW" else score.level
+                    derived = "MEDIUM" if score.level == "LOW" else score.level
+                    requested = request.priority.value
+                    priority = requested if _SEVERITY_RANK[requested] > _SEVERITY_RANK[derived] else derived
                     case_orm = await self.cases.create_case(
                         CaseCreateRequest(
                             title=f"{regime.suspicious_report} review - {ctx.customer_name or 'unknown'} - score {score.score}",

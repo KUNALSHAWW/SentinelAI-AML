@@ -232,3 +232,13 @@ def test_frontend_dir_resolution(tmp_path, monkeypatch):
     (tmp_path / "frontend" / "index.html").write_text("x")
     monkeypatch.chdir(tmp_path)
     assert resolve_frontend_dir() == tmp_path / "frontend"          # the Docker case: package installed elsewhere, cwd=/app
+
+
+def test_request_priority_raises_case_priority_but_never_lowers_it(client):
+    sanc = payload(tx={"parties": ["Sanctioned Russian Bank"]}, priority="LOW")
+    assert client.post("/api/v1/analyze", json=sanc).json()["case"]["priority"] == "CRITICAL"       # engine says critical
+    structuring = payload(tx={"amount": 9500, "transaction_type": "CASH", "origin_country": "US", "destination_country": "US"},
+                          cust={"transaction_history": [{"amount": a, "timestamp": ts(h), "transaction_type": "CASH"} for a, h in [(9200, 8), (9800, 30), (9600, 52)]]},
+                          priority="CRITICAL")
+    d = client.post("/api/v1/analyze", json=structuring).json()
+    assert d["case"]["priority"] == "CRITICAL" and d["risk_assessment"]["risk_level"] == "HIGH"
