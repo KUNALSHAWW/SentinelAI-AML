@@ -1,0 +1,48 @@
+{
+  "as_of": "2026-06-19",
+  "disclaimer": "Reference data for risk scoring only. Lists change every FATF plenary - review before production use and override with SENTINEL_JURISDICTIONS_FILE.",
+  "sources": {
+    "fatf_call_for_action": "https://www.fatf-gafi.org/en/publications/High-risk-and-other-monitored-jurisdictions/Call-for-action-february-2026.html",
+    "fatf_increased_monitoring": "https://www.fatf-gafi.org/en/publications/High-risk-and-other-monitored-jurisdictions/increased-monitoring-june-2026.html"
+  },
+  "fatf_call_for_action": ["IR", "KP", "MM"],
+  "fatf_increased_monitoring": [
+    "AO", "BO", "BA", "BG", "CM", "CI", "CD", "HT", "IQ", "KE", "KW",
+    "LA", "LB", "MC", "NP", "PG", "SS", "SY", "VE", "VN", "VG", "YE"
+  ],
+  "sanctions_exposure": [
+    "IR", "KP", "SY", "CU", "RU", "BY", "MM", "VE", "AF", "LY", "SO", "YE", "ZW", "SD", "CD", "CF"
+  ],
+  "offshore_secrecy": [
+    "KY", "VG", "BM", "PA", "BS", "BZ", "SC", "MU", "LI", "MC", "JE", "GG", "IM", "AD", "VU", "WS", "MH", "CK"
+  ],
+  "alpha3_to_alpha2": {
+    "USA": "US", "GBR": "GB", "CAN": "CA", "DEU": "DE", "FRA": "FR", "IND": "IN", "CHN": "CN", "RUS": "RU",
+    "IRN": "IR", "PRK": "KP", "SYR": "SY", "CUB": "CU", "BLR": "BY", "MMR": "MM", "VEN": "VE", "AFG": "AF",
+    "LBY": "LY", "SOM": "SO", "YEM": "YE", "ZWE": "ZW", "SDN": "SD", "COD": "CD", "CAF": "CF", "CYM": "KY",
+    "VGB": "VG", "BMU": "BM", "PAN": "PA", "BHS": "BS", "BLZ": "BZ", "SYC": "SC", "MUS": "MU", "LIE": "LI",
+    "MCO": "MC", "JEY": "JE", "GGY": "GG", "IMN": "IM", "AND": "AD", "VUT": "VU", "WSM": "WS", "MHL": "MH",
+    "COK": "CK", "ARE": "AE", "CHE": "CH", "LUX": "LU", "MLT": "MT", "SGP": "SG", "HKG": "HK", "NGA": "NG",
+    "PAK": "PK", "NPL": "NP", "KEN": "KE", "VNM": "VN", "LAO": "LA", "LBN": "LB", "IRQ": "IQ", "KWT": "KW",
+    "AUS": "AU", "JPN": "JP", "BRA": "BR", "MEX": "MX", "ZAF": "ZA", "TUR": "TR", "ESP": "ES", "ITA": "IT",
+    "NLD": "NL", "BEL": "BE", "IRL": "IE", "CYP": "CY", "UKR": "UA", "KAZ": "KZ", "BGD": "BD", "LKA": "LK"
+  },
+  "names": {
+    "US": "United States", "GB": "United Kingdom", "CA": "Canada", "DE": "Germany", "FR": "France",
+    "IN": "India", "CN": "China", "RU": "Russia", "IR": "Iran", "KP": "North Korea", "SY": "Syria",
+    "CU": "Cuba", "BY": "Belarus", "MM": "Myanmar", "VE": "Venezuela", "AF": "Afghanistan", "LY": "Libya",
+    "SO": "Somalia", "YE": "Yemen", "ZW": "Zimbabwe", "SD": "Sudan", "CD": "DR Congo",
+    "CF": "Central African Republic", "KY": "Cayman Islands", "VG": "British Virgin Islands",
+    "BM": "Bermuda", "PA": "Panama", "BS": "Bahamas", "BZ": "Belize", "SC": "Seychelles", "MU": "Mauritius",
+    "LI": "Liechtenstein", "MC": "Monaco", "JE": "Jersey", "GG": "Guernsey", "IM": "Isle of Man",
+    "AD": "Andorra", "VU": "Vanuatu", "WS": "Samoa", "MH": "Marshall Islands", "CK": "Cook Islands",
+    "AE": "United Arab Emirates", "CH": "Switzerland", "LU": "Luxembourg", "MT": "Malta", "SG": "Singapore",
+    "HK": "Hong Kong", "NG": "Nigeria", "PK": "Pakistan", "NP": "Nepal", "KE": "Kenya", "VN": "Vietnam",
+    "LA": "Laos", "LB": "Lebanon", "IQ": "Iraq", "KW": "Kuwait", "AO": "Angola", "BO": "Bolivia",
+    "BA": "Bosnia and Herzegovina", "BG": "Bulgaria", "CM": "Cameroon", "CI": "Cote d'Ivoire", "HT": "Haiti",
+    "PG": "Papua New Guinea", "SS": "South Sudan", "AU": "Australia", "JP": "Japan", "BR": "Brazil",
+    "MX": "Mexico", "ZA": "South Africa", "TR": "Turkey", "ES": "Spain", "IT": "Italy", "NL": "Netherlands",
+    "BE": "Belgium", "IE": "Ireland", "CY": "Cyprus", "UA": "Ukraine", "KZ": "Kazakhstan", "BD": "Bangladesh",
+    "LK": "Sri Lanka"
+  }
+}
