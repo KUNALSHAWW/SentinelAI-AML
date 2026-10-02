@@ -37,8 +37,11 @@ jobs:
         run: docker build -t sentinelai:ci .
       - name: Smoke test
         run: |
-          docker run -d --name s -p 8000:8000 -e SENTINEL_API_PUBLIC_DEMO=true sentinelai:ci
+          docker run -d --name sentinel-ci -p 8000:8000 -e SENTINEL_API_PUBLIC_DEMO=true sentinelai:ci
           for i in $(seq 1 30); do curl -fsS localhost:8000/health && break || sleep 2; done
           curl -fsS localhost:8000/health | grep -q '"status":"healthy"'
           curl -fsS -X POST localhost:8000/api/v1/analyze -H 'content-type: application/json' \
             -d '{"transaction":{"amount":2000000,"parties":["Sanctioned Russian Bank"]},"customer":{"name":"X"},"enable_llm_analysis":false}' | grep -q BLOCK
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker logs sentinel-ci || true
