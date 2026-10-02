@@ -10,7 +10,10 @@ transaction-graph motifs, crypto and trade checks) produces an exactly-decomposa
 agents (LangGraph + ReAct) can **raise** a score within a hard cap but can **never lower** it, and never see your data
 unless you opt in. Cases, SAR/STR drafts and a hash-chained audit log are persisted.
 
-<p align="center"><img src="documentation/images/demo-round-trip.png" width="48%"> <img src="documentation/images/demo-sanctions.png" width="48%"></p>
+<p align="center"><img src="documentation/images/hero.png" alt="SentinelAI landing page"></p>
+<p align="center"><img src="documentation/images/demo-sanctions.png" width="49%" alt="A verified sanctions match: score 99, exact waterfall, counterfactuals"> <img src="documentation/images/demo-round-trip.png" width="49%" alt="A round-trip through a holding company: graph motifs and the persisted audit entry"></p>
+
+> **Design.** The interface follows the dark, hairline-border product language of Linear (near-black canvas, one indigo accent, tight Inter with tabular figures) and Stripe's rule for financial data: the chart summarises, the table is the truth. No decorative gradients, icons-in-boxes or simulated output - every pixel in the demo comes from the real API.
 
 ## Why it is different
 
