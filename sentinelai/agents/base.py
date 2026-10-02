@@ -1,282 +1,92 @@
-"""
-SentinelAI Base Agent
-=====================
+"""LLM access helpers shared by the research layer."""
 
-Base class for all LangGraph agents with common functionality.
-"""
+from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, TypeVar, Generic
-from datetime import datetime
-import asyncio
 import re
+from typing import Any, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.language_models import BaseChatModel
 
 from sentinelai.core.config import settings
 from sentinelai.core.logging import get_logger
-from sentinelai.agents.prompts import PromptTemplates
 
 logger = get_logger(__name__)
 
-# Type variable for state
-StateT = TypeVar("StateT", bound=Dict[str, Any])
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_RESPONSE_MARKER = re.compile(r"\n\s*response\s*\n")
+
+
+def extract_text(content: Any) -> str:
+    """Flatten LangChain message content (str or list of content blocks) to plain text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") in (None, "text"):
+                parts.append(str(block.get("text", "")))
+        return "".join(parts)
+    return str(content)
 
 
 def strip_thinking(text: str) -> str:
-    """Strip the Qwen3 'thinking' block, returning only the final answer.
+    """Remove reasoning preambles emitted by reasoning models.
 
-    The qwen3.6-27b model emits its reasoning in a ``thinking`` block and the
-    actual answer after a ``response`` marker. We keep only the answer.
+    Handles ``<think>...</think>`` blocks and the Qwen3-on-Groq layout where
+    reasoning precedes a standalone ``response`` marker line.
     """
     if not text:
         return text
-    match = re.search(r"\n\s*response\s*\n", text)
+    text = _THINK_BLOCK.sub("", text)
+    match = _RESPONSE_MARKER.search(text)
     if match:
-        return text[match.end():].strip()
-    return text
+        text = text[match.end():]
+    return text.strip()
 
 
 class LLMFactory:
-    """Factory for creating LLM instances based on configuration"""
-    
+    """Lazily builds (and caches) the configured chat model."""
+
     _instance: Optional[BaseChatModel] = None
-    
+
+    @classmethod
+    def available(cls) -> bool:
+        return settings.llm.api_key_configured
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._instance = None
+
     @classmethod
     def get_llm(cls, force_new: bool = False) -> BaseChatModel:
-        """Get or create LLM instance"""
-        
         if cls._instance is not None and not force_new:
             return cls._instance
-        
-        provider = settings.llm.provider
-        
-        if provider == "groq":
+        cfg = settings.llm
+        if not cfg.api_key_configured:
+            raise RuntimeError(f"No API key configured for LLM provider '{cfg.provider}'")
+        if cfg.provider == "groq":
             from langchain_groq import ChatGroq
-            
+
             cls._instance = ChatGroq(
-                model=settings.llm.groq_model,
-                temperature=settings.llm.temperature,
-                max_tokens=settings.llm.max_tokens,
-                timeout=settings.llm.timeout,
-                max_retries=settings.llm.max_retries,
-                api_key=settings.llm.groq_api_key.get_secret_value() if settings.llm.groq_api_key else None,
+                model=cfg.groq_model, temperature=cfg.temperature, max_tokens=cfg.max_tokens,
+                timeout=cfg.timeout, max_retries=cfg.max_retries, api_key=cfg.groq_api_key.get_secret_value(),
             )
-            logger.info(f"Initialized Groq LLM with model: {settings.llm.groq_model}")
-            
-        elif provider == "huggingface":
-            try:
-                from langchain_huggingface import HuggingFaceEndpoint
-            except ImportError:
-                logger.warning(
-                    "langchain_huggingface is not installed; falling back to Groq. "
-                    "Set SENTINEL_LLM_PROVIDER=groq to use Groq directly."
-                )
-                from langchain_groq import ChatGroq
-                cls._instance = ChatGroq(
-                    model=settings.llm.groq_model,
-                    temperature=settings.llm.temperature,
-                    max_tokens=settings.llm.max_tokens,
-                    timeout=settings.llm.timeout,
-                    max_retries=settings.llm.max_retries,
-                    api_key=settings.llm.groq_api_key.get_secret_value() if settings.llm.groq_api_key else None,
-                )
-            else:
-                cls._instance = HuggingFaceEndpoint(
-                    repo_id=settings.llm.huggingface_model,
-                    temperature=settings.llm.temperature,
-                    max_new_tokens=settings.llm.max_tokens,
-                    huggingfacehub_api_token=settings.llm.huggingface_api_key.get_secret_value() if settings.llm.huggingface_api_key else None,
-                )
-                logger.info(f"Initialized HuggingFace LLM with model: {settings.llm.huggingface_model}")
+            logger.info("Initialised Groq LLM", extra={"model": cfg.groq_model})
         else:
-            raise ValueError(f"Unsupported LLM provider: {provider}")
-        
-        return cls._instance
-
-
-class BaseAgent(ABC, Generic[StateT]):
-    """
-    Base agent class for all SentinelAI agents.
-    
-    Provides common functionality for:
-    - LLM interaction
-    - State management
-    - Logging and metrics
-    - Error handling
-    """
-    
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        llm: Optional[BaseChatModel] = None
-    ):
-        self.name = name
-        self.description = description
-        self._llm = llm  # may be None; constructed lazily on first use
-        self.logger = get_logger(f"agent.{name}")
-
-        # Metrics
-        self._invocation_count = 0
-        self._total_latency_ms = 0
-        self._error_count = 0
-
-    @property
-    def llm(self) -> BaseChatModel:
-        """Lazily construct the LLM on first use."""
-        if self._llm is None:
-            self._llm = LLMFactory.get_llm()
-        return self._llm
-
-    @abstractmethod
-    async def process(self, state: StateT) -> StateT:
-        """
-        Process the state and return updated state.
-        Must be implemented by subclasses.
-        """
-        pass
-    
-    async def invoke_llm(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        parse_structured: bool = False,
-        enabled: bool = True
-    ) -> str:
-        """
-        Invoke the LLM with the given prompt.
-
-        Args:
-            prompt: The user prompt
-            system_prompt: Optional system prompt
-            parse_structured: Whether to parse structured output
-            enabled: Whether LLM analysis is enabled
-
-        Returns:
-            The LLM response content
-        """
-        if not enabled:
-            return ""
-
-        start_time = datetime.utcnow()
-        
-        try:
-            messages = []
-            
-            if system_prompt:
-                messages.append(SystemMessage(content=system_prompt))
-            else:
-                messages.append(SystemMessage(content=PromptTemplates.SYSTEM_AML_EXPERT))
-            
-            messages.append(HumanMessage(content=prompt))
-            
-            response = await self.llm.ainvoke(messages)
-            
-            # Update metrics
-            self._invocation_count += 1
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
-            self._total_latency_ms += latency
-            
-            self.logger.debug(
-                f"LLM invocation completed",
-                extra={
-                    "latency_ms": latency,
-                    "prompt_length": len(prompt),
-                    "response_length": len(response.content)
-                }
+            try:
+                from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+            except ImportError as exc:
+                raise RuntimeError(
+                    "provider=huggingface requires `pip install sentinelai[huggingface]`"
+                ) from exc
+            endpoint = HuggingFaceEndpoint(
+                repo_id=cfg.huggingface_model, temperature=max(cfg.temperature, 0.01), max_new_tokens=cfg.max_tokens,
+                huggingfacehub_api_token=cfg.huggingface_api_key.get_secret_value(),
             )
-            
-            return strip_thinking(response.content)
-            
-        except Exception as e:
-            self._error_count += 1
-            self.logger.error(f"LLM invocation failed: {str(e)}")
-            raise
-    
-    def extract_risk_codes(self, text: str) -> List[str]:
-        """Extract risk codes from LLM response (UPPER_CASE_CODES)"""
-        pattern = r"\b[A-Z][A-Z_]{3,}[A-Z]\b"
-        codes = re.findall(pattern, text)
-        # Filter out common words that might match
-        excluded = {"THE", "AND", "FOR", "NOT", "BUT", "FROM", "WITH", "THIS", "THAT", "WHEN", "WHERE"}
-        return [code for code in codes if code not in excluded]
-    
-    def extract_score(self, text: str, default: int = 0) -> int:
-        """Extract risk score from LLM response"""
-        patterns = [
-            r"(?:risk\s*score|score)[:\s]*(\d{1,3})",
-            r"(\d{1,3})\s*/\s*100",
-            r"RISK_SCORE[:\s]*(\d{1,3})",
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                score = int(match.group(1))
-                return min(100, max(0, score))  # Clamp to 0-100
-        
-        return default
-    
-    def extract_risk_level(self, text: str) -> str:
-        """Extract risk level from LLM response"""
-        text_upper = text.upper()
-        
-        if "CRITICAL" in text_upper:
-            return "CRITICAL"
-        elif "HIGH" in text_upper and "RISK" in text_upper:
-            return "HIGH"
-        elif "MEDIUM" in text_upper:
-            return "MEDIUM"
-        elif "LOW" in text_upper and "RISK" in text_upper:
-            return "LOW"
-        
-        return "MEDIUM"  # Default
-    
-    def extract_confidence(self, text: str, default: float = 0.5) -> float:
-        """Extract confidence score from LLM response"""
-        patterns = [
-            r"confidence[:\s]*([\d.]+)",
-            r"([\d.]+)\s*confidence",
-            r"CONFIDENCE[:\s]*([\d.]+)",
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                try:
-                    score = float(match.group(1))
-                    # Handle percentage vs decimal
-                    if score > 1:
-                        score = score / 100
-                    return min(1.0, max(0.0, score))
-                except ValueError:
-                    continue
-        
-        return default
-    
-    def update_decision_path(self, state: StateT, step: str) -> StateT:
-        """Add a step to the decision path"""
-        path = state.get("decision_path", [])
-        if not isinstance(path, list):
-            path = []
-        return {**state, "decision_path": path + [f"{self.name}:{step}"]}
-    
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get agent metrics"""
-        avg_latency = (
-            self._total_latency_ms / self._invocation_count 
-            if self._invocation_count > 0 else 0
-        )
-        
-        return {
-            "agent_name": self.name,
-            "invocation_count": self._invocation_count,
-            "average_latency_ms": avg_latency,
-            "error_count": self._error_count,
-            "error_rate": self._error_count / max(1, self._invocation_count)
-        }
-    
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(name='{self.name}')"
+            cls._instance = ChatHuggingFace(llm=endpoint)
+            logger.info("Initialised HuggingFace LLM", extra={"model": cfg.huggingface_model})
+        return cls._instance

@@ -52,25 +52,38 @@ def run(engine, make_ctx):
 
 
 @pytest.fixture
-async def db():
-    """Fresh in-memory database per test."""
+async def db(tmp_path):
+    """Fresh on-disk SQLite per test (in-memory + StaticPool cannot model concurrent sessions)."""
     from sentinelai.db import session as dbs
-    dbs.configure_engine("sqlite+aiosqlite:///:memory:")
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     await dbs.init_db()
     yield dbs
     await dbs.dispose_engine()
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     from fastapi.testclient import TestClient
     from sentinelai.api import deps
     from sentinelai.api.app import create_app
     from sentinelai.db import session as dbs
-    dbs.configure_engine("sqlite+aiosqlite:///:memory:")
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     deps.reset_services()
     cache_module.reset_cache()
     with TestClient(create_app()) as c:
+        yield c
+
+
+@pytest.fixture
+def client_soft(tmp_path):
+    """Like `client`, but server errors become HTTP 500 responses instead of re-raising (tests error handlers)."""
+    from fastapi.testclient import TestClient
+    from sentinelai.api import deps
+    from sentinelai.api.app import create_app
+    from sentinelai.db import session as dbs
+    dbs.configure_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    deps.reset_services()
+    with TestClient(create_app(), raise_server_exceptions=False) as c:
         yield c
 
 
