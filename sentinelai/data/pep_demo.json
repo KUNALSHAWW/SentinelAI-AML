@@ -1,0 +1,15 @@
+{
+  "name": "SentinelAI synthetic PEP demo list",
+  "source": "SYNTHETIC_DEMO",
+  "synthetic": true,
+  "note": "Fictional politically exposed persons for demos and tests. Load a real PEP dataset (e.g. an OpenSanctions export) via SENTINEL_RISK_LISTS_DIR.",
+  "entries": [
+    {"uid": "PEP-001", "name": "Adebayo Okonkwo", "aliases": ["Adebayo Okonkwo-Bello"], "position": "Minister of Finance", "country": "NG", "category": "FOREIGN_PEP", "level": "SENIOR"},
+    {"uid": "PEP-002", "name": "Marta Velasquez Ortega", "aliases": ["Marta Velazquez"], "position": "Senator", "country": "VE", "category": "FOREIGN_PEP", "level": "SENIOR"},
+    {"uid": "PEP-003", "name": "Rajiv Menon-Thorne", "aliases": ["Rajiv Menon Thorne"], "position": "Member of Legislative Assembly", "country": "IN", "category": "DOMESTIC_PEP", "level": "MID"},
+    {"uid": "PEP-004", "name": "Colonel Jean-Baptiste Mwamba", "aliases": ["J-B Mwamba"], "position": "Minister of Defence", "country": "CD", "category": "FOREIGN_PEP", "level": "SENIOR"},
+    {"uid": "PEP-005", "name": "Elias Hartmann-Voss", "aliases": [], "position": "Deputy Governor, Central Bank", "country": "BG", "category": "FOREIGN_PEP", "level": "SENIOR"},
+    {"uid": "PEP-006", "name": "Sunita Kapoor-Iyer", "aliases": ["Sunita Iyer"], "position": "Union Minister", "country": "IN", "category": "DOMESTIC_PEP", "level": "SENIOR"},
+    {"uid": "PEP-007", "name": "Tomas Havel-Reyes", "aliases": [], "position": "Ambassador", "country": "BO", "category": "FOREIGN_PEP", "level": "MID"}
+  ]
+}

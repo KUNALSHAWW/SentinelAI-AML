@@ -1,0 +1,29 @@
+{
+  "name": "SentinelAI synthetic demo list",
+  "source": "SYNTHETIC_DEMO",
+  "as_of": "2026-01-01",
+  "synthetic": true,
+  "note": "Entirely fictional entries for demos and tests. Run `sentinelai sanctions update` to load the official OFAC SDN list.",
+  "entries": [
+    {"uid": "DEMO-001", "name": "Sanctioned Russian Bank", "type": "ENTITY", "aliases": ["SRB Moscow"], "programs": ["DEMO-RUSSIA"], "countries": ["RU"]},
+    {"uid": "DEMO-002", "name": "Terror Group ABC", "type": "ENTITY", "aliases": ["TGABC", "Group ABC"], "programs": ["DEMO-TERROR"], "countries": ["SY", "IQ"]},
+    {"uid": "DEMO-003", "name": "Narcotics Cartel XYZ", "type": "ENTITY", "aliases": ["Cartel XYZ"], "programs": ["DEMO-NARCOTICS"], "countries": ["MX"]},
+    {"uid": "DEMO-004", "name": "North Korea Trading Co", "type": "ENTITY", "aliases": ["DPRK Trading Company"], "programs": ["DEMO-DPRK"], "countries": ["KP"]},
+    {"uid": "DEMO-005", "name": "Iran Shipping Co", "type": "ENTITY", "aliases": ["Persian Gulf Shipping"], "programs": ["DEMO-IRAN"], "countries": ["IR"]},
+    {"uid": "DEMO-006", "name": "Zorvan Petrakov", "type": "INDIVIDUAL", "aliases": ["Zorvan Petrakoff", "Z. Petrakov"], "programs": ["DEMO-RUSSIA"], "countries": ["RU", "CY"]},
+    {"uid": "DEMO-007", "name": "Karim Al-Dazhari", "type": "INDIVIDUAL", "aliases": ["Karim Aldazhari", "Kareem Dazhari"], "programs": ["DEMO-TERROR"], "countries": ["SY", "LB"]},
+    {"uid": "DEMO-008", "name": "Nordavia Holdings FZE", "type": "ENTITY", "aliases": ["Nordavia Trading"], "programs": ["DEMO-RUSSIA"], "countries": ["AE", "RU"]},
+    {"uid": "DEMO-009", "name": "Black Anchor Shipping", "type": "VESSEL_OPERATOR", "aliases": ["Black Anchor Maritime"], "programs": ["DEMO-IRAN"], "countries": ["IR", "AE"]},
+    {"uid": "DEMO-010", "name": "Hydra Remnant Market", "type": "ENTITY", "aliases": ["Hydra Remnant"], "programs": ["DEMO-CYBER"], "countries": ["RU"]},
+    {"uid": "DEMO-011", "name": "Vostok Meridian Bank", "type": "ENTITY", "aliases": ["Vostok Meridian"], "programs": ["DEMO-RUSSIA"], "countries": ["RU", "BY"]},
+    {"uid": "DEMO-012", "name": "Sahel Gold Syndicate", "type": "ENTITY", "aliases": [], "programs": ["DEMO-ARMS"], "countries": ["SD", "CF"]},
+    {"uid": "DEMO-013", "name": "Ashgar Naimi", "type": "INDIVIDUAL", "aliases": ["Asghar Naeemi", "Ashghar Naimy"], "programs": ["DEMO-IRAN"], "countries": ["IR"]},
+    {"uid": "DEMO-014", "name": "Dragon Pearl Commodities", "type": "ENTITY", "aliases": ["DP Commodities"], "programs": ["DEMO-DPRK"], "countries": ["HK", "KP"]},
+    {"uid": "DEMO-015", "name": "Moammar Zahrani", "type": "INDIVIDUAL", "aliases": ["Muammar Zahrani", "Mu'ammar Al-Zahrani"], "programs": ["DEMO-TERROR"], "countries": ["LY"]},
+    {"uid": "DEMO-016", "name": "Crescent Lumen Trading", "type": "ENTITY", "aliases": ["Lumen Crescent"], "programs": ["DEMO-IRAN"], "countries": ["AE", "IR"]},
+    {"uid": "DEMO-017", "name": "Tehran Exporters Syndicate", "type": "ENTITY", "aliases": [], "programs": ["DEMO-IRAN"], "countries": ["IR"]},
+    {"uid": "DEMO-018", "name": "Mirage Aerospace Parts", "type": "ENTITY", "aliases": ["Mirage Aero"], "programs": ["DEMO-EXPORT"], "countries": ["BY", "RU"]},
+    {"uid": "DEMO-019", "name": "Olena Kravtsiv-Brandt", "type": "INDIVIDUAL", "aliases": ["Elena Kravtsiv Brandt"], "programs": ["DEMO-RUSSIA"], "countries": ["UA", "RU"]},
+    {"uid": "DEMO-020", "name": "Pyongyang Meridian Exchange", "type": "ENTITY", "aliases": [], "programs": ["DEMO-DPRK"], "countries": ["KP"]}
+  ]
+}
