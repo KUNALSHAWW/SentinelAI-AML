@@ -32,7 +32,7 @@ def prf(c: Dict[str, int]) -> Dict[str, float]:
 def roc_auc(scores: Sequence[float], labels: Sequence[int]) -> float:
     """Mann-Whitney U formulation with average ranks for ties."""
     pairs = sorted(zip(scores, labels))
-    ranks, i = {}, 0
+    i = 0
     n = len(pairs)
     rank_of = [0.0] * n
     while i < n:

@@ -137,32 +137,34 @@ def find_cycles(edges: List[Edge], focus: Set[str], max_len: int = CYCLE_MAX_LEN
         out_edges[e.source].append(e)
     cycles, seen_signatures = [], set()
     budget = [20_000]                       # bound the search on dense graphs
+
+    def dfs(start: str, node: str, path: List[Edge], visited: Set[str]) -> None:
+        budget[0] -= 1
+        if len(path) >= max_len or budget[0] < 0:
+            return
+        for e in out_edges.get(node, []):
+            if path and e.timestamp < path[-1].timestamp:
+                continue                                   # money must move forward in time
+            if path and e.timestamp - path[0].timestamp > CYCLE_WINDOW:
+                continue
+            if e.target == start and path:
+                cycle = path + [e]
+                amounts = [c.amount_usd for c in cycle]
+                if min(amounts) >= CYCLE_AMOUNT_TOLERANCE * max(amounts):
+                    sig = frozenset((c.source, c.target) for c in cycle)
+                    if sig not in seen_signatures:
+                        seen_signatures.add(sig)
+                        cycles.append({
+                            "type": "cycle", "nodes": [c.source for c in cycle],
+                            "length": len(cycle), "amount_usd": round(min(amounts), 2),
+                            "span_hours": round((cycle[-1].timestamp - cycle[0].timestamp).total_seconds() / 3600, 1),
+                            "edge_keys": [c.key() for c in cycle],
+                        })
+            elif e.target not in visited and e.target != start:
+                dfs(start, e.target, path + [e], visited | {e.target})
+
     for start in focus:
-        def dfs(node: str, path: List[Edge], visited: Set[str]):
-            budget[0] -= 1
-            if len(path) >= max_len or budget[0] < 0:
-                return
-            for e in out_edges.get(node, []):
-                if path and e.timestamp < path[-1].timestamp:
-                    continue                                   # money must move forward in time
-                if path and e.timestamp - path[0].timestamp > CYCLE_WINDOW:
-                    continue
-                if e.target == start and path:
-                    cycle = path + [e]
-                    amounts = [c.amount_usd for c in cycle]
-                    if min(amounts) >= CYCLE_AMOUNT_TOLERANCE * max(amounts):
-                        sig = frozenset((c.source, c.target) for c in cycle)
-                        if sig not in seen_signatures:
-                            seen_signatures.add(sig)
-                            cycles.append({
-                                "type": "cycle", "nodes": [c.source for c in cycle],
-                                "length": len(cycle), "amount_usd": round(min(amounts), 2),
-                                "span_hours": round((cycle[-1].timestamp - cycle[0].timestamp).total_seconds() / 3600, 1),
-                                "edge_keys": [c.key() for c in cycle],
-                            })
-                elif e.target not in visited and e.target != start:
-                    dfs(e.target, path + [e], visited | {e.target})
-        dfs(start, [], {start})
+        dfs(start, start, [], {start})
     return cycles
 
 

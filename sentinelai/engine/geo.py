@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import List
 
 from sentinelai.core.jurisdictions import (
-    CALL_FOR_ACTION, INCREASED_MONITORING, OFFSHORE_SECRECY, SANCTIONS_EXPOSURE, get_jurisdictions,
+    CALL_FOR_ACTION,
+    INCREASED_MONITORING,
+    OFFSHORE_SECRECY,
+    SANCTIONS_EXPOSURE,
+    get_jurisdictions,
 )
 from sentinelai.engine.types import GEOGRAPHIC, EngineInput, Signal
 

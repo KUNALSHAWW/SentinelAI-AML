@@ -16,8 +16,8 @@ os.environ.update({
 import pytest  # noqa: E402
 
 from sentinelai.core import cache as cache_module  # noqa: E402
-from sentinelai.core.config import settings  # noqa: E402
 from sentinelai.core import security  # noqa: E402
+from sentinelai.core.config import settings  # noqa: E402
 from sentinelai.engine import DetectionEngine, build_input  # noqa: E402
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
@@ -64,6 +64,7 @@ async def db(tmp_path):
 @pytest.fixture
 def client(tmp_path):
     from fastapi.testclient import TestClient
+
     from sentinelai.api import deps
     from sentinelai.api.app import create_app
     from sentinelai.db import session as dbs
@@ -78,6 +79,7 @@ def client(tmp_path):
 def client_soft(tmp_path):
     """Like `client`, but server errors become HTTP 500 responses instead of re-raising (tests error handlers)."""
     from fastapi.testclient import TestClient
+
     from sentinelai.api import deps
     from sentinelai.api.app import create_app
     from sentinelai.db import session as dbs

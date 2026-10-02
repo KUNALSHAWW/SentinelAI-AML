@@ -90,6 +90,8 @@ class DatabaseSettings(BaseSettings):
 
     database_url_override: Optional[str] = Field(default=None, validation_alias="DATABASE_URL")
     sqlite_path: str = "data/sentinelai.db"
+    auto_create_tables: bool = Field(
+        default=True, description="create_all() on startup (dev convenience). Disable when using Alembic migrations.")
 
     postgres_host: Optional[str] = None
     postgres_port: int = 5432
@@ -256,7 +258,7 @@ class Settings(BaseSettings):
         return self.environment == "production"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()
 

@@ -15,7 +15,7 @@ from sentinelai.engine.sanctions import SanctionsScreener, get_screener
 from sentinelai.engine.scoring import combine
 from sentinelai.engine.types import Signal
 from sentinelai.evaluation import metrics as M
-from sentinelai.evaluation.generator import FIRST, LAST, Sample, make_dataset
+from sentinelai.evaluation.generator import FIRST, LAST, make_dataset
 from sentinelai.evaluation.variants import VARIANTS, make_variant
 
 CATEGORIES = ["SANCTIONS", "PEP", "GEOGRAPHIC", "BEHAVIORAL", "NETWORK", "CRYPTO", "TRADE", "CUSTOMER", "INTEGRITY"]

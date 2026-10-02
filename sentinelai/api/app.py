@@ -8,13 +8,14 @@ The single-page frontend is mounted last so API routes always win.
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -32,7 +33,15 @@ from sentinelai.models.schemas import ErrorResponse
 
 logger = get_logger(__name__)
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+def resolve_frontend_dir() -> Path:
+    """SENTINEL_FRONTEND_DIR, else ./frontend (Docker WORKDIR / repo root), else the source-tree copy."""
+    explicit = os.environ.get("SENTINEL_FRONTEND_DIR")
+    candidates = [Path(explicit)] if explicit else []
+    candidates += [Path.cwd() / "frontend", Path(__file__).resolve().parent.parent.parent / "frontend"]
+    return next((c for c in candidates if (c / "index.html").is_file()), candidates[-1])
+
+
+FRONTEND_DIR = resolve_frontend_dir()
 RATE_LIMIT_EXEMPT = ("/health", "/metrics")
 
 
@@ -78,7 +87,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     setup_logging(settings.monitoring.log_level, settings.monitoring.log_format, settings.monitoring.log_file)
-    await init_db()
+    if settings.database.auto_create_tables:
+        await init_db()
     from sentinelai.engine.sanctions import get_screener
     info = get_screener().info
     logger.info("SentinelAI ready", extra={

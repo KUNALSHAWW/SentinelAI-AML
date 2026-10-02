@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SentinelAI | Enterprise AML Detection Platform</title>
+    <title>SentinelAI | Explainable AML Intelligence</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -61,7 +61,7 @@
         <div class="hero-content">
             <div class="hero-badge glass-effect">
                 <span class="badge-dot"></span>
-                <span>Enterprise-Grade AML Detection</span>
+                <span>Explainable · Auditable · Privacy-first</span>
             </div>
             <h1 class="hero-title">
                 <span class="title-line">AI-Powered</span>
@@ -69,35 +69,34 @@
                 <span class="title-line">Intelligence</span>
             </h1>
             <p class="hero-description">
-                Transform your compliance operations with advanced LangGraph orchestration, 
-                Chain-of-Thought reasoning, and 8 specialized AI agents working in harmony 
-                to detect money laundering patterns in real-time.
+                A deterministic detection engine - sanctions &amp; PEP screening, jurisdiction risk, behavioural
+                typologies and transaction-graph motifs - with a score you can <em>explain to the point</em>, plus
+                guarded LLM research that can raise a score but never lower it.
             </p>
             <div class="hero-buttons">
                 <a href="#demo" class="btn btn-primary">
                     <i class="fas fa-play"></i>
                     Try Live Demo
                 </a>
-                <a href="https://sentinelai-api.onrender.com/docs" target="_blank" class="btn btn-secondary">
+                <a href="#" data-api-link="/docs" target="_blank" class="btn btn-secondary">
                     <i class="fas fa-book"></i>
                     API Documentation
                 </a>
             </div>
             <div class="hero-stats">
                 <div class="stat-item">
-                    <span class="stat-value" data-count="8">0</span>
-                    <span class="stat-label">AI Agents</span>
+                    <span class="stat-value" data-count="15">0</span>
+                    <span class="stat-label">Typologies detected</span>
                 </div>
                 <div class="stat-divider"></div>
                 <div class="stat-item">
-                    <span class="stat-value" data-count="99">0</span>
-                    <span class="stat-suffix">%</span>
-                    <span class="stat-label">Accuracy</span>
+                    <span class="stat-value" data-count="0.96">0</span>
+                    <span class="stat-label">ROC-AUC (synthetic benchmark)</span>
                 </div>
                 <div class="stat-divider"></div>
                 <div class="stat-item">
-                    <span class="stat-value">&lt;2s</span>
-                    <span class="stat-label">Response Time</span>
+                    <span class="stat-value">&lt;1ms</span>
+                    <span class="stat-label">Deterministic engine / txn</span>
                 </div>
             </div>
         </div>
@@ -152,16 +151,16 @@
                         <i class="fas fa-project-diagram"></i>
                     </div>
                     <h3>Network Analysis</h3>
-                    <p>Entity relationship mapping and shell company detection</p>
-                    <div class="feature-tag">Graph Analysis</div>
+                    <p>Fan-in/out, pass-through accounts and 2-5 hop round-trips over a graph that remembers earlier analyses</p>
+                    <div class="feature-tag">Graph motifs</div>
                 </div>
                 <div class="feature-card" data-aos="fade-up" data-aos-delay="400">
                     <div class="feature-icon behavioral">
                         <i class="fas fa-brain"></i>
                     </div>
                     <h3>Behavioral Analysis</h3>
-                    <p>Anomaly detection and velocity checks for suspicious patterns</p>
-                    <div class="feature-tag">ML-Powered</div>
+                    <p>Regime-aware structuring, velocity and deviation from the customer's own baseline</p>
+                    <div class="feature-tag">Baselines &amp; velocity</div>
                 </div>
                 <div class="feature-card" data-aos="fade-up" data-aos-delay="500">
                     <div class="feature-icon crypto">
@@ -176,16 +175,16 @@
                         <i class="fas fa-globe-americas"></i>
                     </div>
                     <h3>Geographic Risk</h3>
-                    <p>Jurisdiction risk scoring and tax haven detection</p>
-                    <div class="feature-tag">190+ Countries</div>
+                    <p>FATF call-for-action / increased-monitoring lists, sanctions exposure and secrecy jurisdictions</p>
+                    <div class="feature-tag">FATF June 2026</div>
                 </div>
                 <div class="feature-card" data-aos="fade-up" data-aos-delay="700">
                     <div class="feature-icon document">
                         <i class="fas fa-file-alt"></i>
                     </div>
                     <h3>Document Analysis</h3>
-                    <p>Trade document verification and invoice fraud detection</p>
-                    <div class="feature-tag">NLP Engine</div>
+                    <p>Over/under-invoicing against market value, vague goods and arithmetic mismatches</p>
+                    <div class="feature-tag">TBML checks</div>
                 </div>
             </div>
         </div>
@@ -198,229 +197,161 @@
                 <span class="section-badge">Interactive</span>
                 <h2 class="section-title">Live <span class="gradient-text">Demo</span></h2>
                 <p class="section-description">
-                    Test the AML detection system in real-time. Enter transaction details 
-                    and watch our AI agents analyze for potential risks.
+                    Pick a scenario or edit the transaction. Every result is produced by the real API - if it is
+                    unreachable you will see an error, never a simulated answer.
                 </p>
             </div>
-            
+
+            <div class="scenarios-container">
+                <h3 class="scenarios-title">Scenarios</h3>
+                <div class="scenarios-grid" id="scenarioGrid"><span class="muted-note">Loading scenarios...</span></div>
+            </div>
+
             <div class="demo-container">
                 <div class="demo-panel input-panel glass-effect">
-                    <div class="panel-header">
-                        <i class="fas fa-edit"></i>
-                        <span>Transaction Input</span>
-                    </div>
+                    <div class="panel-header"><i class="fas fa-edit"></i><span>Transaction</span></div>
                     <div class="panel-content">
-                        <div class="input-group">
-                            <label>Amount (USD)</label>
-                            <div class="input-wrapper">
-                                <span class="input-prefix">$</span>
-                                <input type="number" id="amount" value="500000" placeholder="Enter amount">
-                            </div>
-                        </div>
+                        <div class="scenario-info" id="scenarioInfo">Custom transaction</div>
                         <div class="input-row">
                             <div class="input-group">
-                                <label>Origin Country</label>
-                                <select id="originCountry">
-                                    <option value="US">🇺🇸 United States</option>
-                                    <option value="RU" selected>🇷🇺 Russia</option>
-                                    <option value="CN">🇨🇳 China</option>
-                                    <option value="IR">🇮🇷 Iran</option>
-                                    <option value="KP">🇰🇵 North Korea</option>
-                                    <option value="NG">🇳🇬 Nigeria</option>
-                                    <option value="GB">🇬🇧 United Kingdom</option>
-                                    <option value="AE">🇦🇪 UAE</option>
-                                </select>
+                                <label>Amount</label>
+                                <input type="number" id="amount" value="500000" min="1" step="any">
                             </div>
                             <div class="input-group">
-                                <label>Destination Country</label>
-                                <select id="destCountry">
-                                    <option value="US">🇺🇸 United States</option>
-                                    <option value="KY" selected>🇰🇾 Cayman Islands</option>
-                                    <option value="CH">🇨🇭 Switzerland</option>
-                                    <option value="PA">🇵🇦 Panama</option>
-                                    <option value="VG">🇻🇬 British Virgin Islands</option>
-                                    <option value="GB">🇬🇧 United Kingdom</option>
-                                    <option value="SG">🇸🇬 Singapore</option>
+                                <label>Currency</label>
+                                <select id="currency">
+                                    <option value="USD" selected>USD</option><option value="INR">INR</option>
+                                    <option value="EUR">EUR</option><option value="GBP">GBP</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="input-group">
-                            <label>Transaction Type</label>
-                            <select id="transactionType">
-                                <option value="WIRE_TRANSFER" selected>Wire Transfer</option>
-                                <option value="CRYPTO">Cryptocurrency</option>
-                                <option value="CASH">Cash Deposit</option>
-                                <option value="ACH">ACH Transfer</option>
-                                <option value="TRADE_FINANCE">Trade Finance</option>
-                            </select>
-                        </div>
-                        <div class="input-group">
-                            <label>Customer Name</label>
-                            <input type="text" id="customerName" value="Moscow Trading LLC" placeholder="Enter customer name">
+                        <div class="input-row">
+                            <div class="input-group"><label>Origin country</label><select id="originCountry"></select></div>
+                            <div class="input-group"><label>Destination country</label><select id="destCountry"></select></div>
                         </div>
                         <div class="input-row">
                             <div class="input-group">
-                                <label>Customer Type</label>
+                                <label>Transaction type</label>
+                                <select id="transactionType">
+                                    <option value="WIRE_TRANSFER" selected>Wire transfer</option>
+                                    <option value="CASH">Cash deposit</option>
+                                    <option value="CRYPTO">Cryptocurrency</option>
+                                    <option value="ACH">ACH</option>
+                                    <option value="TRADE_FINANCE">Trade finance</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="NEFT_RTGS">NEFT / RTGS</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Regime</label>
+                                <select id="regime">
+                                    <option value="US_BSA">US - BSA / FinCEN</option>
+                                    <option value="IN_PMLA">India - PMLA / FIU-IND</option>
+                                    <option value="EU_AMLD">EU - AMLD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Other parties (comma-separated)</label>
+                            <input type="text" id="parties" value="Cayman Holdings Limited" placeholder="e.g. Acme Supplies, Beta Trading">
+                        </div>
+                        <div class="input-group">
+                            <label>Customer name</label>
+                            <input type="text" id="customerName" value="Moscow Trading LLC" placeholder="Customer name">
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label>Customer type</label>
                                 <select id="customerType">
                                     <option value="CORPORATE" selected>Corporate</option>
                                     <option value="INDIVIDUAL">Individual</option>
-                                    <option value="FINANCIAL_INSTITUTION">Financial Institution</option>
+                                    <option value="FINANCIAL_INSTITUTION">Financial institution</option>
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label>Account Age (Days)</label>
-                                <input type="number" id="accountAge" value="30" placeholder="Days">
+                                <label>Account age (days)</label>
+                                <input type="number" id="accountAge" value="30" min="0" placeholder="unknown">
                             </div>
                         </div>
+                        <div class="toggle-row">
+                            <label class="toggle"><input type="checkbox" id="hasDocs"> <span>Supporting documents attached</span></label>
+                            <label class="toggle"><input type="checkbox" id="enableAI"> <span>AI research agents</span></label>
+                            <label class="toggle" title="Never send this subject to any external service"><input type="checkbox" id="confidential"> <span>Confidential subject (no external lookup)</span></label>
+                        </div>
+                        <details class="advanced">
+                            <summary>API key (private deployments)</summary>
+                            <input type="password" id="apiKey" placeholder="X-API-Key - kept in this browser tab only" autocomplete="off">
+                        </details>
                         <button class="btn btn-primary btn-analyze" id="analyzeBtn">
-                            <i class="fas fa-search"></i>
-                            <span>Analyze Transaction</span>
+                            <i class="fas fa-search"></i><span>Analyze transaction</span>
                             <div class="btn-loader" id="btnLoader"></div>
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="demo-panel output-panel glass-effect">
                     <div class="panel-header">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Analysis Results</span>
-                        <div class="api-status" id="apiStatus">
-                            <span class="status-dot"></span>
-                            <span class="status-text">API Ready</span>
-                        </div>
+                        <i class="fas fa-chart-line"></i><span>Analysis</span>
+                        <div class="api-status" id="apiStatus"><span class="status-dot"></span><span class="status-text">Checking API...</span></div>
                     </div>
                     <div class="panel-content" id="resultsPanel">
                         <div class="results-placeholder">
-                            <div class="placeholder-icon">
-                                <i class="fas fa-shield-alt"></i>
-                            </div>
-                            <p>Enter transaction details and click "Analyze" to see AI-powered risk assessment</p>
+                            <div class="placeholder-icon"><i class="fas fa-shield-alt"></i></div>
+                            <p>Choose a scenario above or edit the transaction, then press "Analyze".</p>
                         </div>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Sample Scenarios -->
-            <div class="scenarios-container">
-                <h3 class="scenarios-title">Quick Test Scenarios</h3>
-                <div class="scenarios-grid">
-                    <button class="scenario-btn" data-scenario="high-risk">
-                        <span class="scenario-icon">🚨</span>
-                        <span class="scenario-name">High Risk</span>
-                        <span class="scenario-desc">Russia → Cayman, $500K</span>
-                    </button>
-                    <button class="scenario-btn" data-scenario="crypto">
-                        <span class="scenario-icon">₿</span>
-                        <span class="scenario-name">Crypto Mixer</span>
-                        <span class="scenario-desc">Unknown origin, mixer used</span>
-                    </button>
-                    <button class="scenario-btn" data-scenario="structuring">
-                        <span class="scenario-icon">💰</span>
-                        <span class="scenario-name">Structuring</span>
-                        <span class="scenario-desc">Multiple $9,500 deposits</span>
-                    </button>
-                    <button class="scenario-btn" data-scenario="clean">
-                        <span class="scenario-icon">✅</span>
-                        <span class="scenario-name">Clean Transaction</span>
-                        <span class="scenario-desc">US → Canada, established customer</span>
-                    </button>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Architecture Section -->
     <section class="architecture-section" id="architecture">
         <div class="section-container">
             <div class="section-header">
                 <span class="section-badge">Under the Hood</span>
                 <h2 class="section-title">System <span class="gradient-text">Architecture</span></h2>
-                <p class="section-description">
-                    Built on cutting-edge technologies for enterprise-grade performance and reliability.
-                </p>
+                <p class="section-description">The deterministic core always runs; the LLM layer is optional, capped, and cannot lower a score.</p>
             </div>
-            
             <div class="arch-diagram">
                 <div class="arch-layer layer-api">
                     <div class="layer-title">API Layer</div>
                     <div class="layer-items">
-                        <div class="arch-item">
-                            <i class="fas fa-server"></i>
-                            <span>FastAPI</span>
-                        </div>
-                        <div class="arch-item">
-                            <i class="fas fa-lock"></i>
-                            <span>Auth & Rate Limit</span>
-                        </div>
-                        <div class="arch-item">
-                            <i class="fas fa-book-open"></i>
-                            <span>OpenAPI Docs</span>
-                        </div>
+                        <div class="arch-item"><i class="fas fa-server"></i><span>FastAPI + SSE</span></div>
+                        <div class="arch-item"><i class="fas fa-lock"></i><span>API-key RBAC &amp; rate limits</span></div>
+                        <div class="arch-item"><i class="fas fa-chart-bar"></i><span>Prometheus metrics</span></div>
                     </div>
                 </div>
-                
-                <div class="arch-connector">
-                    <div class="connector-line"></div>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                
+                <div class="arch-connector"><div class="connector-line"></div><i class="fas fa-chevron-down"></i></div>
                 <div class="arch-layer layer-orchestration">
-                    <div class="layer-title">LangGraph Orchestrator</div>
+                    <div class="layer-title">LangGraph pipeline</div>
                     <div class="layer-items">
-                        <div class="arch-item highlight">
-                            <i class="fas fa-project-diagram"></i>
-                            <span>State Machine</span>
-                        </div>
-                        <div class="arch-item highlight">
-                            <i class="fas fa-brain"></i>
-                            <span>CoT Reasoning</span>
-                        </div>
-                        <div class="arch-item highlight">
-                            <i class="fas fa-route"></i>
-                            <span>ReAct Pattern</span>
-                        </div>
+                        <div class="arch-item highlight"><i class="fas fa-filter"></i><span>screen</span></div>
+                        <div class="arch-item highlight"><i class="fas fa-search"></i><span>research (optional)</span></div>
+                        <div class="arch-item highlight"><i class="fas fa-balance-scale"></i><span>score &rarr; decide</span></div>
+                        <div class="arch-item highlight"><i class="fas fa-file-signature"></i><span>SAR / STR draft</span></div>
                     </div>
                 </div>
-                
-                <div class="arch-connector">
-                    <div class="connector-line"></div>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                
+                <div class="arch-connector"><div class="connector-line"></div><i class="fas fa-chevron-down"></i></div>
                 <div class="arch-layer layer-agents">
-                    <div class="layer-title">Specialized Agents</div>
+                    <div class="layer-title">Deterministic detection engine</div>
                     <div class="agents-grid">
-                        <div class="agent-chip"><i class="fas fa-exchange-alt"></i> Transaction</div>
+                        <div class="agent-chip"><i class="fas fa-ban"></i> Sanctions (fuzzy, OFAC loader)</div>
                         <div class="agent-chip"><i class="fas fa-user-tie"></i> PEP</div>
-                        <div class="agent-chip"><i class="fas fa-ban"></i> Sanctions</div>
-                        <div class="agent-chip"><i class="fas fa-project-diagram"></i> Network</div>
-                        <div class="agent-chip"><i class="fas fa-brain"></i> Behavioral</div>
+                        <div class="agent-chip"><i class="fas fa-globe"></i> Jurisdictions</div>
+                        <div class="agent-chip"><i class="fas fa-brain"></i> Behavioural</div>
+                        <div class="agent-chip"><i class="fas fa-project-diagram"></i> Transaction graph</div>
                         <div class="agent-chip"><i class="fab fa-bitcoin"></i> Crypto</div>
-                        <div class="agent-chip"><i class="fas fa-globe"></i> Geographic</div>
-                        <div class="agent-chip"><i class="fas fa-file-alt"></i> Document</div>
+                        <div class="agent-chip"><i class="fas fa-file-alt"></i> Trade / TBML</div>
+                        <div class="agent-chip"><i class="fas fa-user-secret"></i> Input-manipulation</div>
                     </div>
                 </div>
-                
-                <div class="arch-connector">
-                    <div class="connector-line"></div>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                
+                <div class="arch-connector"><div class="connector-line"></div><i class="fas fa-chevron-down"></i></div>
                 <div class="arch-layer layer-infra">
-                    <div class="layer-title">Infrastructure</div>
+                    <div class="layer-title">State</div>
                     <div class="layer-items">
-                        <div class="arch-item">
-                            <i class="fas fa-database"></i>
-                            <span>PostgreSQL</span>
-                        </div>
-                        <div class="arch-item">
-                            <i class="fas fa-bolt"></i>
-                            <span>Redis Cache</span>
-                        </div>
-                        <div class="arch-item">
-                            <i class="fas fa-robot"></i>
-                            <span>Groq LLM</span>
-                        </div>
+                        <div class="arch-item"><i class="fas fa-database"></i><span>SQLite / PostgreSQL</span></div>
+                        <div class="arch-item"><i class="fas fa-link"></i><span>Hash-chained audit log</span></div>
+                        <div class="arch-item"><i class="fas fa-bolt"></i><span>Redis (optional)</span></div>
                     </div>
                 </div>
             </div>
@@ -475,34 +406,22 @@
             </div>
             
             <div class="api-endpoints">
-                <div class="endpoint-card">
-                    <div class="endpoint-method post">POST</div>
-                    <div class="endpoint-path">/api/v1/analyze</div>
-                    <div class="endpoint-desc">Analyze a single transaction for AML risks</div>
-                </div>
-                <div class="endpoint-card">
-                    <div class="endpoint-method post">POST</div>
-                    <div class="endpoint-path">/api/v1/analyze/batch</div>
-                    <div class="endpoint-desc">Batch analyze multiple transactions</div>
-                </div>
-                <div class="endpoint-card">
-                    <div class="endpoint-method get">GET</div>
-                    <div class="endpoint-path">/api/v1/cases</div>
-                    <div class="endpoint-desc">List investigation cases</div>
-                </div>
-                <div class="endpoint-card">
-                    <div class="endpoint-method get">GET</div>
-                    <div class="endpoint-path">/health</div>
-                    <div class="endpoint-desc">System health check</div>
-                </div>
+                <div class="endpoint-card"><div class="endpoint-method post">POST</div><div class="endpoint-path">/api/v1/analyze</div><div class="endpoint-desc">Explainable analysis (deterministic + optional AI research)</div></div>
+                <div class="endpoint-card"><div class="endpoint-method post">POST</div><div class="endpoint-path">/api/v1/analyze/stream</div><div class="endpoint-desc">Same, with Server-Sent-Event progress</div></div>
+                <div class="endpoint-card"><div class="endpoint-method post">POST</div><div class="endpoint-path">/api/v1/analyze/batch</div><div class="endpoint-desc">Batch with per-item results (failures are reported)</div></div>
+                <div class="endpoint-card"><div class="endpoint-method get">GET</div><div class="endpoint-path">/api/v1/analyses/{id}</div><div class="endpoint-desc">Retrieve a stored analysis</div></div>
+                <div class="endpoint-card"><div class="endpoint-method get">GET</div><div class="endpoint-path">/api/v1/cases</div><div class="endpoint-desc">Cases with an enforced state machine, SAR/STR drafts</div></div>
+                <div class="endpoint-card"><div class="endpoint-method get">GET</div><div class="endpoint-path">/api/v1/alerts</div><div class="endpoint-desc">Alert triage queue</div></div>
+                <div class="endpoint-card"><div class="endpoint-method get">GET</div><div class="endpoint-path">/api/v1/audit/verify</div><div class="endpoint-desc">Recompute the tamper-evident hash chain</div></div>
+                <div class="endpoint-card"><div class="endpoint-method get">GET</div><div class="endpoint-path">/health</div><div class="endpoint-desc">Real dependency checks</div></div>
             </div>
             
             <div class="api-cta">
-                <a href="https://sentinelai-api.onrender.com/docs" target="_blank" class="btn btn-primary">
+                <a href="#" data-api-link="/docs" target="_blank" class="btn btn-primary">
                     <i class="fas fa-external-link-alt"></i>
                     Open API Documentation
                 </a>
-                <a href="https://sentinelai-api.onrender.com/redoc" target="_blank" class="btn btn-secondary">
+                <a href="#" data-api-link="/redoc" target="_blank" class="btn btn-secondary">
                     <i class="fas fa-book"></i>
                     ReDoc Format
                 </a>
@@ -514,13 +433,13 @@
     <section class="cta-section">
         <div class="cta-content glass-effect">
             <h2>Ready to Transform Your Compliance?</h2>
-            <p>Get started with SentinelAI today and experience the future of AML detection.</p>
+            <p>Clone it, run the benchmark, read the audit trail - everything claimed here is reproducible.</p>
             <div class="cta-buttons">
                 <a href="https://github.com/KUNALSHAWW/SentinelAI-AML" target="_blank" class="btn btn-primary">
                     <i class="fab fa-github"></i>
                     View on GitHub
                 </a>
-                <a href="https://sentinelai-api.onrender.com/docs" target="_blank" class="btn btn-secondary">
+                <a href="#" data-api-link="/docs" target="_blank" class="btn btn-secondary">
                     <i class="fas fa-rocket"></i>
                     Try the API
                 </a>
@@ -536,7 +455,7 @@
                     <i class="fas fa-shield-alt"></i>
                     <span>SentinelAI</span>
                 </div>
-                <p>Enterprise-grade AML Detection Platform</p>
+                <p>Explainable AML intelligence</p>
             </div>
             <div class="footer-links">
                 <div class="footer-column">
@@ -547,7 +466,7 @@
                 </div>
                 <div class="footer-column">
                     <h4>Developer</h4>
-                    <a href="https://sentinelai-api.onrender.com/docs" target="_blank">Documentation</a>
+                    <a href="#" data-api-link="/docs" target="_blank">API docs</a>
                     <a href="https://github.com/KUNALSHAWW/SentinelAI-AML" target="_blank">GitHub</a>
                 </div>
                 <div class="footer-column">
@@ -559,10 +478,11 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>© 2025 Kunal Shaw. Built with ❤️ for financial compliance.</p>
+            <p>© 2026 Kunal Shaw. Built with ❤️ for financial compliance.</p>
         </div>
     </footer>
 
+    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

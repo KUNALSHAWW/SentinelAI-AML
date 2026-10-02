@@ -1,6 +1,5 @@
 """Deterministic detectors, one behaviour per test."""
 
-import pytest
 
 from tests.conftest import NOW, ts
 
@@ -34,7 +33,6 @@ def test_structuring_pattern_us(run):
 
 
 def test_structuring_uses_regime_threshold_and_currency():
-    from tests.conftest import NOW
     from sentinelai.engine import DetectionEngine, build_input
     tx = {"amount": 950_000, "currency": "INR", "transaction_type": "CASH", "origin_country": "IN", "destination_country": "IN",
           "parties": ["x"], "timestamp": NOW.isoformat()}

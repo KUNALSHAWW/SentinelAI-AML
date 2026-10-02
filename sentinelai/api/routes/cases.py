@@ -12,8 +12,16 @@ from sentinelai.api.deps import get_alert_service, get_case_service
 from sentinelai.core.security import Principal, require
 from sentinelai.models.database import AlertStatus
 from sentinelai.models.schemas import (
-    AlertResponse, AlertTypeEnum, CaseCommentRequest, CaseCreateRequest, CaseResponse, CaseStatusEnum,
-    CaseUpdateRequest, CommentResponse, DashboardMetrics, RiskLevelEnum,
+    AlertResponse,
+    AlertTypeEnum,
+    CaseCommentRequest,
+    CaseCreateRequest,
+    CaseResponse,
+    CaseStatusEnum,
+    CaseUpdateRequest,
+    CommentResponse,
+    DashboardMetrics,
+    RiskLevelEnum,
 )
 from sentinelai.services import reporting
 from sentinelai.services.case_management import CaseNotFound, InvalidTransition

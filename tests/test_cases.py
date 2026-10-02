@@ -89,6 +89,7 @@ async def test_filters_and_pagination(db):
 
 async def test_dashboard_counts_overdue_and_status(db):
     from datetime import timedelta
+
     from sentinelai.core.time import utcnow
     c = await new_case()
     async with session_scope() as s:

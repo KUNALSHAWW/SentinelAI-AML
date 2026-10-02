@@ -38,8 +38,18 @@ from sentinelai.engine.scoring import ScoreResult
 from sentinelai.engine.types import Edge, Signal
 from sentinelai.models.database import Alert, Analysis, GraphEdge
 from sentinelai.models.schemas import (
-    AlertResponse, AnalysisRequest, AnalysisResponse, BatchAnalysisResponse, BatchItemResult, CaseCreateRequest,
-    CaseResponse, Explanation, LLMAnalysisResult, RiskAssessmentResult, RiskFactor, RiskLevelEnum,
+    AlertResponse,
+    AnalysisRequest,
+    AnalysisResponse,
+    BatchAnalysisResponse,
+    BatchItemResult,
+    CaseCreateRequest,
+    CaseResponse,
+    Explanation,
+    LLMAnalysisResult,
+    RiskAssessmentResult,
+    RiskFactor,
+    RiskLevelEnum,
 )
 from sentinelai.services.audit import audit, canonical
 from sentinelai.services.case_management import CaseManagementService
@@ -215,10 +225,8 @@ class AnalysisService:
                         audit_info, mode, elapsed_ms) -> AnalysisResponse:
         engine, score, decision = state["engine"], state["score"], state["decision"]
         regime = get_regime(ctx.regime)
-        by_code = {s.code: s for s in signals}
         factors = []
         for c in score.contributions:
-            sig = by_code.get(c["code"])
             factors.append(RiskFactor(
                 code=c["code"], description=c["description"], severity=RiskLevelEnum(c["severity"]), score=c["points"],
                 category=c["category"], typology=c.get("typology")))

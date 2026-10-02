@@ -1,6 +1,5 @@
 """Authentication, RBAC, rate limiting and CORS."""
 
-import pytest
 
 from sentinelai.core import security
 from sentinelai.core.config import settings

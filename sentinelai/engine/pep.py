@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from sentinelai.core.config import settings
-from sentinelai.engine import names as nm
 from sentinelai.engine.sanctions import ListEntry, WatchList
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -81,7 +80,7 @@ class PEPScreener:
     def screen(self, name: str, occupation: str = "") -> PEPResult:
         matches: List[Dict[str, Any]] = []
         threshold = settings.risk.pep_match_threshold
-        for score, ei, text, is_alias, aligned in self.watchlist.search(name, threshold):
+        for score, ei, text, _is_alias, _aligned in self.watchlist.search(name, threshold):
             entry = self.watchlist.entries[ei]
             info = self.meta.get(entry.uid, {})
             matches.append({

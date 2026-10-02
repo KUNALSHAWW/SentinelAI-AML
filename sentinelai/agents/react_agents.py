@@ -11,7 +11,7 @@ unverified signals and can never lower a deterministic score.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from langchain_core.messages import HumanMessage
 
@@ -126,7 +126,7 @@ class AgentRunner:
             finding = parse_finding(name, text)
             metrics.LLM_CALLS.labels(name, finding.parse_status).inc()
             return finding
-        except asyncio.TimeoutError:
+        except TimeoutError:
             metrics.LLM_CALLS.labels(name, "timeout").inc()
             return AgentFinding(agent=name, parse_status="timeout", summary=f"Agent exceeded {timeout}s budget")
         except Exception as exc:

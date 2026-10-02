@@ -14,7 +14,7 @@ An AML platform must not leak customer identity to third parties by default.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 

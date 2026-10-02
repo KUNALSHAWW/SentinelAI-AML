@@ -1,8 +1,8 @@
 import pytest
 
 from sentinelai.agents import privacy
-from sentinelai.agents.findings import AgentFinding, findings_to_signals, parse_finding
 from sentinelai.agents.base import extract_text, strip_thinking
+from sentinelai.agents.findings import AgentFinding, findings_to_signals, parse_finding
 
 
 # ------------------------------------------------------------------ findings parsing (regression for the score-scraping bug)

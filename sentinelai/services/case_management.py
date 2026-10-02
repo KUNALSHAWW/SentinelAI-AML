@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelai.core import metrics
@@ -23,7 +23,13 @@ from sentinelai.core.regimes import get_regime
 from sentinelai.core.time import utcnow
 from sentinelai.db.session import session_scope
 from sentinelai.models.database import (
-    Alert, AlertStatus, Analysis, Case, CaseComment, CaseStatus, RiskLevel,
+    Alert,
+    AlertStatus,
+    Analysis,
+    Case,
+    CaseComment,
+    CaseStatus,
+    RiskLevel,
 )
 from sentinelai.models.schemas import CaseCreateRequest, CaseUpdateRequest
 from sentinelai.services.audit import audit

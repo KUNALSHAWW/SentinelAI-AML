@@ -51,7 +51,7 @@ def compute_hash(prev_hash: str, seq: int, timestamp: str, actor: str, action: s
                  entity_type: str, entity_id: str, payload_text: str) -> str:
     body = canonical({"seq": seq, "timestamp": timestamp, "actor": actor, "action": action,
                       "entity_type": entity_type, "entity_id": entity_id, "payload": payload_text})
-    return hashlib.sha256(f"{prev_hash}|{body}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{prev_hash}|{body}".encode()).hexdigest()
 
 
 class AuditService:

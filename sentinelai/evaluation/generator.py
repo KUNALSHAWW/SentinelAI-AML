@@ -16,9 +16,9 @@ a fair comparison against a naive threshold baseline on identical data.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 FIRST = ["Aarav", "Priya", "Rahul", "Sneha", "Wei", "Li", "Chen", "Mei", "John", "Emily", "Michael", "Sarah", "Carlos", "Maria",
          "Ahmed", "Fatima", "Omar", "Layla", "Ivan", "Olga", "Hans", "Greta", "Pierre", "Sophie", "Kenji", "Yuki", "Tariq", "Aisha",
@@ -72,7 +72,7 @@ class Builder:
     def history(self, n: int, lo: float, hi: float, span_h: float, currency="USD", counterparties=None,
                 direction="OUT", ttype=None) -> List[Dict[str, Any]]:
         out = []
-        for i in range(n):
+        for _ in range(n):
             h = {"amount": round(self.r.uniform(lo, hi), 2), "currency": currency,
                  "timestamp": self.ts(self.r.uniform(2, span_h)), "direction": direction}
             if counterparties:

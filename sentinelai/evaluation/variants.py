@@ -62,7 +62,7 @@ def translit(name: str, r: random.Random) -> str:
 
 
 def case_punct(name: str, r: random.Random) -> str:
-    return r.choice([name.upper(), name.lower(), name.replace(" ", "_"), name.replace(" ", "-"), f"{name}."]) 
+    return r.choice([name.upper(), name.lower(), name.replace(" ", "_"), name.replace(" ", "-"), f"{name}."])
 
 
 def extra_token(name: str, r: random.Random) -> str:

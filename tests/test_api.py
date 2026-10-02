@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 
-from tests.conftest import NOW, ts
+from tests.conftest import ts
 
 TX = {"amount": 5000, "currency": "USD", "transaction_type": "WIRE_TRANSFER", "origin_country": "US", "destination_country": "CA",
       "parties": ["Acme Supplies"], "documents": ["Invoice"]}
@@ -219,3 +219,16 @@ def test_dashboard_reflects_activity(client):
     client.post("/api/v1/analyze", json=payload(tx={"parties": ["Sanctioned Russian Bank"]}))
     m = client.get("/api/v1/dashboard/metrics").json()
     assert m["total_transactions_24h"] == 1 and m["suspicious_transactions_24h"] == 1 and m["open_cases"] == 1
+
+
+def test_frontend_dir_resolution(tmp_path, monkeypatch):
+    from sentinelai.api.app import resolve_frontend_dir
+    (tmp_path / "ui").mkdir()
+    (tmp_path / "ui" / "index.html").write_text("<html>custom</html>")
+    monkeypatch.setenv("SENTINEL_FRONTEND_DIR", str(tmp_path / "ui"))
+    assert resolve_frontend_dir() == tmp_path / "ui"
+    monkeypatch.delenv("SENTINEL_FRONTEND_DIR")
+    (tmp_path / "frontend").mkdir()
+    (tmp_path / "frontend" / "index.html").write_text("x")
+    monkeypatch.chdir(tmp_path)
+    assert resolve_frontend_dir() == tmp_path / "frontend"          # the Docker case: package installed elsewhere, cwd=/app

@@ -21,7 +21,13 @@ from sentinelai.engine.pep import PEPScreener, get_pep_screener
 from sentinelai.engine.sanctions import SanctionsScreener, get_screener
 from sentinelai.engine.scoring import ScoreResult, combine, decide
 from sentinelai.engine.types import (
-    CUSTOMER, INTEGRITY, PEP, SANCTIONS, Edge, EngineInput, Signal,
+    CUSTOMER,
+    INTEGRITY,
+    PEP,
+    SANCTIONS,
+    Edge,
+    EngineInput,
+    Signal,
 )
 from sentinelai.engine.typologies import describe
 

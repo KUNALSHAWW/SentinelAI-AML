@@ -21,7 +21,7 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from fastapi import HTTPException, Request
 

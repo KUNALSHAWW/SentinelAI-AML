@@ -1,6 +1,4 @@
-import math
 
-import pytest
 
 from sentinelai.core.config import settings
 from sentinelai.engine.scoring import combine, combine_with_ai, decide, level_for
@@ -102,7 +100,6 @@ def test_decide_sanctions_requires_verified_match():
 
 
 def test_decide_actions_by_level():
-    cfg = settings.risk
     s = lambda w: [sig("A", w)]
     assert decide(combine(s(.05)), s(.05))["recommended_action"] == "APPROVE"
     assert decide(combine(s(.4)), s(.4))["recommended_action"] == "REVIEW"

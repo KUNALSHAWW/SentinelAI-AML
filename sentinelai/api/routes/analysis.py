@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,10 @@ from sentinelai.core.logging import get_logger
 from sentinelai.core.security import Principal, require
 from sentinelai.engine.sanctions import get_screener
 from sentinelai.models.schemas import (
-    AnalysisRequest, AnalysisResponse, BatchAnalysisRequest, BatchAnalysisResponse,
+    AnalysisRequest,
+    AnalysisResponse,
+    BatchAnalysisRequest,
+    BatchAnalysisResponse,
 )
 from sentinelai.services.analysis import AnalysisNotFound
 
@@ -61,7 +64,7 @@ async def analyze_stream(request: AnalysisRequest, http_request: Request,
             while True:
                 try:
                     kind, payload = await asyncio.wait_for(queue.get(), timeout=15)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if await http_request.is_disconnected():
                         break
                     yield ": keep-alive\n\n"

@@ -233,3 +233,9 @@ test-results/
 # Profiling
 *.prof
 *.pstats
+
+# SentinelAI runtime data
+data/*.db
+data/*.db-*
+data/lists/
+*.db

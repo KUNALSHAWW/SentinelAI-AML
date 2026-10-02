@@ -6,7 +6,7 @@ import pytest
 
 from sentinelai.core import fx
 from sentinelai.core.cache import MemoryCache
-from sentinelai.core.jurisdictions import CALL_FOR_ACTION, INCREASED_MONITORING, OFFSHORE_SECRECY, get_jurisdictions
+from sentinelai.core.jurisdictions import CALL_FOR_ACTION, OFFSHORE_SECRECY, get_jurisdictions
 from sentinelai.core.regimes import REGIMES, get_regime
 from sentinelai.core.time import ensure_utc, utcnow
 from sentinelai.services.scenarios import load_scenarios, scenario_request
