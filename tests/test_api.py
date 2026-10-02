@@ -242,3 +242,21 @@ def test_request_priority_raises_case_priority_but_never_lowers_it(client):
                           priority="CRITICAL")
     d = client.post("/api/v1/analyze", json=structuring).json()
     assert d["case"]["priority"] == "CRITICAL" and d["risk_assessment"]["risk_level"] == "HIGH"
+
+
+def test_app_starts_degraded_when_database_is_unreachable(tmp_path, monkeypatch):
+    """Regression (Render): an unreachable/expired DATABASE_URL crashed startup. Now the API boots, /health reports it,
+    and database-free public-demo analysis still works."""
+    from fastapi.testclient import TestClient
+
+    from sentinelai.api.app import create_app
+    from sentinelai.core.config import settings
+    from sentinelai.db import session as dbs
+    dbs.configure_engine("postgresql+asyncpg://u:p@127.0.0.1:1/none")      # connection refused
+    monkeypatch.setattr(settings.api, "public_demo", True)
+    monkeypatch.setattr(settings, "environment", "production")
+    with TestClient(create_app()) as c:
+        h = c.get("/health").json()
+        assert h["status"] == "degraded" and h["dependencies"]["database"]["status"] == "unavailable"
+        r = c.post("/api/v1/analyze", json=payload(tx={"parties": ["Sanctioned Russian Bank"]}))
+        assert r.status_code == 200 and r.json()["recommended_action"] == "BLOCK" and r.json()["analysis_id"] is None

@@ -88,7 +88,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     setup_logging(settings.monitoring.log_level, settings.monitoring.log_format, settings.monitoring.log_file)
     if settings.database.auto_create_tables:
-        await init_db()
+        try:
+            await init_db()
+        except Exception as exc:   # an unreachable database must not take the whole API down (public demo needs none)
+            logger.error("Database initialisation failed (%s: %s) - starting in DEGRADED mode; /health reports it",
+                         type(exc).__name__, str(exc)[:200])
     from sentinelai.engine.sanctions import get_screener
     info = get_screener().info
     logger.info("SentinelAI ready", extra={
