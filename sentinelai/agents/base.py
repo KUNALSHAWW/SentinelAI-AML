@@ -68,7 +68,18 @@ class LLMFactory:
         cfg = settings.llm
         if not cfg.api_key_configured:
             raise RuntimeError(f"No API key configured for LLM provider '{cfg.provider}'")
-        if cfg.provider == "groq":
+        if cfg.provider == "ollama":
+            from langchain_ollama import ChatOllama
+
+            headers = {}
+            if cfg.ollama_api_key and cfg.ollama_api_key.get_secret_value():
+                headers["Authorization"] = f"Bearer {cfg.ollama_api_key.get_secret_value()}"
+            cls._instance = ChatOllama(
+                model=cfg.ollama_model, base_url=cfg.ollama_base_url, temperature=cfg.temperature,
+                num_predict=cfg.max_tokens, client_kwargs={"headers": headers, "timeout": cfg.timeout},
+            )
+            logger.info("Initialised Ollama LLM", extra={"model": cfg.ollama_model, "base_url": cfg.ollama_base_url})
+        elif cfg.provider == "groq":
             from langchain_groq import ChatGroq
 
             cls._instance = ChatGroq(

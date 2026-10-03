@@ -28,10 +28,10 @@ services:
       - {key: SENTINEL_API_PUBLIC_DEMO, value: "true"}
       - {key: SENTINEL_API_CORS_ORIGINS, value: '["*"]'}
       - {key: SENTINEL_API_TRUST_PROXY, value: "true"}
-      - {key: SENTINEL_LLM_PROVIDER, value: groq}
-      - {key: GROQ_API_KEY, sync: false}
+      - {key: SENTINEL_LLM_PROVIDER, value: ollama}
+      - {key: OLLAMA_API_KEY, sync: false}
+      - {key: OLLAMA_MODEL, value: "gpt-oss:120b"}
       - {key: TAVILY_API_KEY, sync: false}
       # Privacy default: no customer data leaves the service. Opt in per deployment.
       - {key: SENTINEL_LLM_WEB_SEARCH_ENABLED, value: "false"}
-      - {key: SENTINEL_LLM_GROQ_MODEL, value: "qwen/qwen3.6-27b"}
       - {key: SENTINEL_MONITOR_LOG_LEVEL, value: INFO}

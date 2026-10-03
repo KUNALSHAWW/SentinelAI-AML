@@ -10,7 +10,7 @@ sentinelai serve              # UI /, API /docs
 Data lives in `data/sentinelai.db` (SQLite, created on first start).
 
 ## Enable AI research
-Set `GROQ_API_KEY` (and optionally `SENTINEL_LLM_GROQ_MODEL`). Web search stays **off** unless you also set
+Set `OLLAMA_API_KEY` and `OLLAMA_MODEL` (Ollama Cloud by default; set `OLLAMA_BASE_URL=http://localhost:11434` for a local server), or switch with `SENTINEL_LLM_PROVIDER=groq|huggingface`. Web search stays **off** unless you also set
 `SENTINEL_LLM_WEB_SEARCH_ENABLED=true` (+ `TAVILY_API_KEY` for Tavily; DuckDuckGo needs no key). Requests with
 `restrict_external_lookup: true` never trigger a search.
 

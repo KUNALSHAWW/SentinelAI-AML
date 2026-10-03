@@ -44,7 +44,19 @@ class LLMSettings(BaseSettings):
 
     model_config = _config("SENTINEL_LLM_")
 
-    provider: Literal["groq", "huggingface"] = "groq"
+    provider: Literal["ollama", "groq", "huggingface"] = "ollama"
+    ollama_api_key: Optional[SecretStr] = Field(
+        default=None, validation_alias=AliasChoices("OLLAMA_API_KEY", "SENTINEL_LLM_OLLAMA_API_KEY")
+    )
+    ollama_base_url: str = Field(
+        default="https://ollama.com",
+        validation_alias=AliasChoices("OLLAMA_BASE_URL", "OLLAMA_HOST", "SENTINEL_LLM_OLLAMA_BASE_URL"),
+        description="Ollama Cloud by default; point at http://localhost:11434 for a local server (no key needed).",
+    )
+    ollama_model: str = Field(
+        default="gpt-oss:120b",
+        validation_alias=AliasChoices("OLLAMA_MODEL", "SENTINEL_LLM_OLLAMA_MODEL"),
+    )
     groq_api_key: Optional[SecretStr] = Field(
         default=None, validation_alias=AliasChoices("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY")
     )
@@ -77,7 +89,14 @@ class LLMSettings(BaseSettings):
     )
 
     @property
+    def model_name(self) -> str:
+        return {"ollama": self.ollama_model, "groq": self.groq_model}.get(self.provider, self.huggingface_model)
+
+    @property
     def api_key_configured(self) -> bool:
+        if self.provider == "ollama":
+            local = "ollama.com" not in self.ollama_base_url
+            return bool(self.ollama_api_key and self.ollama_api_key.get_secret_value()) or local
         if self.provider == "groq":
             return bool(self.groq_api_key and self.groq_api_key.get_secret_value())
         return bool(self.huggingface_api_key and self.huggingface_api_key.get_secret_value())

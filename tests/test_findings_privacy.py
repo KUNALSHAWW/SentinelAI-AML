@@ -113,3 +113,9 @@ def test_search_tools_off_by_default(monkeypatch):
     assert get_search_tools() == []
     monkeypatch.setattr(settings.llm, "web_search_enabled", True)
     assert all(t.name for t in get_search_tools())
+
+
+def test_agent_queries_name_countries_not_bare_codes(make_ctx):
+    from sentinelai.agents.react_agents import build_queries
+    q = build_queries(make_ctx(tx={"origin_country": "RU", "destination_country": "KY"}))
+    assert "Cayman Islands (KY)" in q["geographic"] and "Russia (RU)" in q["geographic"]

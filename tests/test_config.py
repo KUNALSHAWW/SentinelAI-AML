@@ -73,3 +73,16 @@ def test_postgres_tls_defaults_and_sslmode_translation(monkeypatch):
     assert DatabaseSettings().connect_args == {"ssl": "disable"}
     monkeypatch.delenv("DATABASE_URL")
     assert DatabaseSettings().connect_args == {}              # SQLite needs none
+
+
+def test_ollama_provider_defaults_and_local_needs_no_key(monkeypatch):
+    from sentinelai.core.config import LLMSettings
+    s = LLMSettings(_env_file=None)
+    assert s.provider == "ollama" and not s.api_key_configured
+    monkeypatch.setenv("OLLAMA_API_KEY", "k")
+    monkeypatch.setenv("OLLAMA_MODEL", "glm-4.6")
+    s = LLMSettings(_env_file=None)
+    assert s.api_key_configured and s.model_name == "glm-4.6"
+    monkeypatch.delenv("OLLAMA_API_KEY")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    assert LLMSettings(_env_file=None).api_key_configured
