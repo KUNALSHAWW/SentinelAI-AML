@@ -40,7 +40,7 @@ sentinelai evaluate --n 3000     # regenerate the benchmark
 pytest                           # 200+ tests
 ```
 No API key, database server or internet is needed: SQLite, the deterministic engine and a synthetic demo sanctions list
-work out of the box. Add `GROQ_API_KEY` for AI research; run `sentinelai sanctions update` for the real OFAC list.
+work out of the box. Add `OLLAMA_API_KEY` (+ `OLLAMA_MODEL`) for AI research; run `sentinelai sanctions update` for the real OFAC list.
 
 ```bash
 docker compose up -d                              # API + PostgreSQL + Redis

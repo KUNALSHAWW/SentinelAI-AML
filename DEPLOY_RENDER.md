@@ -1,7 +1,7 @@
 # Deploying on Render
 
 1. **Blueprint**: New + → Blueprint → select this repo; Render reads `render.yaml` (Docker web service + free PostgreSQL).
-2. **Secrets** (Dashboard → Environment): `GROQ_API_KEY` (optional), `SENTINEL_API_KEYS` (`name:role:key,...`), `TAVILY_API_KEY` (optional).
+2. **Secrets** (Dashboard → Environment): `OLLAMA_API_KEY` and `OLLAMA_MODEL` (optional), `SENTINEL_API_KEYS` (`name:role:key,...`), `TAVILY_API_KEY` (optional).
 3. Defaults in the blueprint: migrations run on start, `SENTINEL_API_PUBLIC_DEMO=true` (unauthenticated, rate-limited, nothing persisted - turn it off for a private deployment),
    web search **off**.
 4. Verify: `curl https://<service>.onrender.com/health` → `"status":"healthy"`; the UI is served at `/`.

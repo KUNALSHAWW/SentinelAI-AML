@@ -4,7 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 
-for key in ("GROQ_API_KEY", "SENTINEL_LLM_GROQ_API_KEY", "TAVILY_API_KEY", "DATABASE_URL", "REDIS_URL"):
+for key in ("GROQ_API_KEY", "OLLAMA_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "SENTINEL_LLM_GROQ_API_KEY", "TAVILY_API_KEY", "DATABASE_URL", "REDIS_URL"):
     os.environ.pop(key, None)
 os.environ.update({
     "SENTINEL_ENVIRONMENT": "development",

@@ -126,7 +126,7 @@ class AMLOrchestrator:
 
         async def one(name: str, query: str) -> AgentFinding:
             key = "agent:" + hashlib.sha256(
-                f"{name}|{query}|{settings.llm.groq_model}|{settings.llm.web_search_enabled}|{confidential}".encode()
+                f"{name}|{query}|{settings.llm.provider}:{settings.llm.model_name}|{settings.llm.web_search_enabled}|{confidential}".encode()
             ).hexdigest()
             cached = await cache.get(key)
             if cached:
@@ -141,6 +141,9 @@ class AMLOrchestrator:
         findings: List[AgentFinding] = list(await asyncio.gather(*[one(n, queries[n]) for n in names]))
         failed = [f.agent for f in findings if not f.usable]
         warnings = []
+        if not settings.llm.web_search_enabled:
+            warnings.append("AI findings are model knowledge only - web search is disabled, so no live lookups or sources "
+                            "were consulted; treat statements such as 'no records found' as unverified")
         status = "ok"
         if failed:
             status = "failed" if len(failed) == len(findings) else "partial"

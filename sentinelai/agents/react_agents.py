@@ -11,7 +11,7 @@ unverified signals and can never lower a deterministic score.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from langchain_core.messages import HumanMessage
 
@@ -22,6 +22,7 @@ from sentinelai.agents.prompts import UNTRUSTED_POLICY, json_contract
 from sentinelai.agents.tools import get_search_tools
 from sentinelai.core import metrics
 from sentinelai.core.config import settings
+from sentinelai.core.jurisdictions import get_jurisdictions
 from sentinelai.core.logging import get_logger
 from sentinelai.engine.types import EngineInput
 
@@ -75,11 +76,17 @@ def system_prompt(name: str, tools_available: bool) -> str:
 
 def build_queries(ctx: EngineInput, sanctions_summary: str = "") -> Dict[str, str]:
     """User-turn messages per agent. All free text is sanitised, redacted and delimited."""
-    route = untrusted("Route", f"{ctx.origin_country or '?'} -> {' -> '.join(ctx.intermediate_countries + [ctx.destination_country or '?'])}")
+    juris = get_jurisdictions()
+
+    def cname(code: Optional[str]) -> str:
+        # Always give the model the country NAME with its ISO code - bare codes get misread (KY vs KG).
+        return f"{juris.name(code)} ({juris.normalize(code)})" if code else "?"
+
+    route = untrusted("Route", " -> ".join(cname(c) for c in [ctx.origin_country, *ctx.intermediate_countries, ctx.destination_country]))
     parties = untrusted("Parties", ", ".join(ctx.parties) or "none", max_len=600)
     queries = {
         "sanctions": f"Assess sanctions exposure.\n{parties}\n{untrusted('Customer', ctx.customer_name)}\n"
-                     f"Countries: {ctx.origin_country or '?'} / {ctx.destination_country or '?'}\n"
+                     f"Countries: {cname(ctx.origin_country)} / {cname(ctx.destination_country)}\n"
                      f"Deterministic list screening result: {sanctions_summary or 'no list hits'}",
         "pep": f"Assess PEP status.\n{untrusted('Customer', ctx.customer_name)}\n"
                f"{untrusted('Occupation', ctx.occupation)}\nNationality: {ctx.nationality or 'unknown'}",

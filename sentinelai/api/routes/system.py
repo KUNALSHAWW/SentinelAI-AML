@@ -30,7 +30,7 @@ async def health() -> HealthResponse:
         "database": {"status": "connected" if db_ok else "unavailable", "backend": "sqlite" if settings.database.is_sqlite else "postgresql"},
         "cache": "memory" if isinstance(get_cache(), MemoryCache) else "redis",
         "llm": {"provider": settings.llm.provider, "configured": settings.llm.api_key_configured,
-                "model": settings.llm.groq_model if settings.llm.provider == "groq" else settings.llm.huggingface_model},
+                "model": settings.llm.model_name},
         "web_search": "enabled" if settings.llm.web_search_enabled else "disabled (privacy default)",
         "sanctions_list": {"source": screener["source"], "entries": screener["entries"], "as_of": screener["as_of"],
                            "synthetic_demo_data": screener["synthetic"]},
