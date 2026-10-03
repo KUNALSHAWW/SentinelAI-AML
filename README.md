@@ -40,7 +40,7 @@ sentinelai evaluate --n 3000     # regenerate the benchmark
 pytest                           # 200+ tests
 ```
 No API key, database server or internet is needed: SQLite, the deterministic engine and a synthetic demo sanctions list
-work out of the box. Add `OLLAMA_API_KEY` (+ `OLLAMA_MODEL`) for AI research; run `sentinelai sanctions update` for the real OFAC list.
+work out of the box. Add `OLLAMA_API_KEY` (+ `OLLAMA_MODEL`, e.g. `deepseek-v4.1-flash`) for AI research; run `sentinelai sanctions update` for the real OFAC list.
 
 ```bash
 docker compose up -d                              # API + PostgreSQL + Redis
@@ -104,9 +104,18 @@ modest recall by design. The value is relative evidence, regression protection a
 API-key RBAC (fail-closed in production), non-bypassable rate limiting, public-demo mode that persists nothing, redaction,
 opt-in guarded web search, prompt-injection sanitisation + detection, hash-chained audit trail. Threat model: [`SECURITY.md`](SECURITY.md).
 
+
+## What the AI layer is (and isn't)
+
+The scoring engine is deterministic and needs no LLM. The optional AI layer runs four to six specialist agents
+(sanctions, PEP, geographic, network, plus crypto/document when relevant) on **Ollama** (Cloud or local; Groq and HuggingFace
+are alternatives). With `SENTINEL_LLM_WEB_SEARCH_ENABLED=false` (the default, for privacy) they answer from model knowledge
+only: there are no live lookups or sources, and every result says so in `warnings`. Turn web search on (plus a `TAVILY_API_KEY`)
+for tool-using research. Either way findings are labelled *unverified*, can only raise a score, and are capped.
+
 ## Configuration
 Everything is optional - see [`.env.example`](.env.example). Highlights: `SENTINEL_RISK_REGIME` (`US_BSA`/`IN_PMLA`/`EU_AMLD`),
-`SENTINEL_LLM_MAX_UPLIFT`, `SENTINEL_LLM_WEB_SEARCH_ENABLED`, `SENTINEL_API_KEYS`, `DATABASE_URL`, `REDIS_URL`.
+`SENTINEL_LLM_PROVIDER` (`ollama` default | `groq` | `huggingface`), `OLLAMA_API_KEY`, `OLLAMA_MODEL`, `OLLAMA_BASE_URL` (Ollama Cloud, or `http://localhost:11434` for a local server), `SENTINEL_LLM_MAX_UPLIFT`, `SENTINEL_LLM_WEB_SEARCH_ENABLED`, `SENTINEL_API_KEYS`, `DATABASE_URL`, `REDIS_URL`.
 Deployment: [`SETUP.md`](SETUP.md), [`DEPLOY_RENDER.md`](DEPLOY_RENDER.md).
 
 ## Repository layout

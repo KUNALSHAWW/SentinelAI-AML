@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+- LLM provider switched to **Ollama** (Cloud or local) by default; Groq/HuggingFace remain selectable.
+- Agent prompts name countries with their ISO codes (fixes a KY/KG misread); results warn when AI findings are model knowledge only (web search off).
+
 ## 2.0.0
 
 A ground-up rework driven by a full code review. Everything the README claims is now implemented, tested or measured.
